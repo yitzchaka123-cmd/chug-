@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1786710584733,
+      "tag": "0000_fat_wilson_fisk",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1786718884548,
+      "tag": "0001_calm_scarecrow",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1786720155788,
+      "tag": "0002_sharp_skaar",
+      "breakpoints": true
+    }
+  ]
+}
