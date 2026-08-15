@@ -1,0 +1,162 @@
+import assert from "node:assert/strict";
+import { readFile, readdir } from "node:fs/promises";
+import { extname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import test from "node:test";
+import { Miniflare } from "miniflare";
+
+const projectRoot = fileURLToPath(new URL("../", import.meta.url));
+const publicRoot = join(projectRoot, "public");
+const migrations = ["0000_fat_wilson_fisk.sql", "0001_calm_scarecrow.sql", "0002_sharp_skaar.sql"];
+const mimeTypes = new Map([[".png", "image/png"], [".jpg", "image/jpeg"], [".jpeg", "image/jpeg"], [".ttf", "font/ttf"], [".svg", "image/svg+xml"]]);
+
+async function staticAsset(request) {
+  try {
+    const pathname = decodeURIComponent(new URL(request.url).pathname).replace(/^\/+/, "");
+    if (!pathname || pathname.includes("..")) return new Response("Not found", { status: 404 });
+    return new Response(await readFile(join(publicRoot, pathname)), { headers: { "Content-Type": mimeTypes.get(extname(pathname).toLowerCase()) || "application/octet-stream" } });
+  } catch {
+    return new Response("Not found", { status: 404 });
+  }
+}
+
+async function workerModules(root, relative = "") {
+  const entries = await readdir(join(root, relative), { withFileTypes: true });
+  const modules = [];
+  for (const entry of entries) {
+    const path = relative ? `${relative}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) modules.push(...await workerModules(root, path));
+    else if (entry.isFile() && entry.name.endsWith(".js")) modules.push({ type: "ESModule", path });
+  }
+  return modules;
+}
+
+async function json(response) {
+  const body = await response.json();
+  assert.ok(response.ok, `${response.status}: ${JSON.stringify(body)}`);
+  return body;
+}
+
+function requestPath(value) {
+  if (!value.startsWith("http://") && !value.startsWith("https://")) return value;
+  const parsed = new URL(value);
+  return `${parsed.pathname}${parsed.search}`;
+}
+
+test("registration, custom pricing, schedules, PDFs, admin data and backups work together", async () => {
+  const builtServerRoot = join(projectRoot, "dist/server");
+  const discoveredModules = await workerModules(builtServerRoot);
+  discoveredModules.sort((left, right) => left.path === "index.js" ? -1 : right.path === "index.js" ? 1 : left.path.localeCompare(right.path));
+  const mf = new Miniflare({
+    modules: discoveredModules,
+    modulesRoot: builtServerRoot,
+    rootPath: builtServerRoot,
+    compatibilityDate: "2026-05-15",
+    compatibilityFlags: ["nodejs_compat"],
+    d1Databases: { DB: "choir-test-db" },
+    r2Buckets: ["BUCKET"],
+    serviceBindings: { ASSETS: staticAsset },
+    bindings: {
+      CHOIR_DATA_KEY: "v1:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+      CHOIR_TOKEN_SECRET: "isolated-worker-test-token-secret-with-enough-entropy",
+      CHOIR_ADMIN_PASSCODE: "0331",
+    },
+  });
+
+  try {
+    const db = await mf.getD1Database("DB");
+    for (const migration of migrations) {
+      const source = await readFile(join(projectRoot, "drizzle", migration), "utf8");
+      for (const statement of source.split("--> statement-breakpoint").map((item) => item.trim()).filter(Boolean)) await db.prepare(statement).run();
+    }
+
+    const request = (path, init) => mf.dispatchFetch(`http://choir.test${path}`, init);
+    const standard = await json(await request("/api/registration-config"));
+    assert.equal(standard.year, "2026–2027");
+    assert.equal(standard.amounts.monthly, 200);
+    assert.ok(standard.agreementSections.length > 8);
+
+    const login = await request("/api/admin/session", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ passcode: "0331" }) });
+    assert.equal(login.status, 200);
+    const cookie = login.headers.get("set-cookie")?.split(";")[0];
+    assert.ok(cookie?.startsWith("choir_admin_session="));
+    const adminHeaders = { Cookie: cookie, "Content-Type": "application/json" };
+    const years = await json(await request("/api/admin/years", { headers: adminHeaders }));
+    const yearId = years.years.find((year) => year.status === "active").id;
+
+    const group = await json(await request("/api/admin/groups", { method: "POST", headers: adminHeaders, body: JSON.stringify({ yearId, name: "Test Group", startTime: "17:00", endTime: "17:50", location: "Test Studio", ageMin: 7, ageMax: 11 }) }));
+    assert.ok(group.id);
+
+    const offer = await json(await request("/api/admin/custom-links", { method: "POST", headers: adminHeaders, body: JSON.stringify({ yearId, groupId: group.id, label: "Test discount", registrationFee: 150, monthlyFee: 150, juneFee: 50, securityCheck: 1200, allowedPaymentMethod: "cash", proofPolicy: "none", monthOverrides: { "2026-10": 100 } }) }));
+    const offerToken = new URL(offer.url).searchParams.get("offer");
+    assert.ok(offerToken);
+    const customConfig = await json(await request(`/api/registration-config?offer=${encodeURIComponent(offerToken)}`));
+    assert.equal(customConfig.amounts.monthly, 150);
+    assert.deepEqual(customConfig.paymentMethods, ["Cash"]);
+    const customAgreementText = customConfig.agreementSections.flatMap((section) => section.paragraphs).map((paragraph) => paragraph.text).join("\n");
+    assert.match(customAgreementText, /Test discount/);
+    assert.match(customAgreementText, /Monthly Cost: 150₪/);
+    assert.doesNotMatch(customAgreementText, /Monthly Cost: 200₪/);
+
+    const fakeForm = { daughter: "Test Student", birthdate: "2017-03-12", father: "Test Parent", fatherPhone: "0500000000", mother: "", motherPhone: "", email: "test-parent@example.invalid", emergencyName: "Test Contact", emergencyPhone: "0500000001", emergencyRelation: "Relative", allergies: "None", medical: "None", medications: "None", additionalNote: "", address: "", school: "", method: "Cash", signer: "Test Parent" };
+    const draft = await json(await request("/api/registrations/draft", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ data: { form: fakeForm, step: 1, approvals: [], offerToken } }) }));
+    assert.ok(draft.token);
+    const resumed = await json(await request(`/api/registrations/draft?token=${encodeURIComponent(draft.token)}`));
+    assert.equal(resumed.data.form.daughter, "Test Student");
+
+    const signatureData = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAF/gL+XzmF+wAAAABJRU5ErkJggg==";
+    const formData = new FormData();
+    formData.set("payload", JSON.stringify({
+      form: fakeForm,
+      approvals: customConfig.agreementSections.filter((section) => section.title !== "Introduction").map((section) => ({ sectionTitle: section.title, understood: true })),
+      agreementVersion: customConfig.agreementVersion,
+      offerToken,
+      securityCheckAccepted: true,
+      medicalConsent: true,
+      paymentProofAccepted: false,
+      guardianAccepted: true,
+      privacyAccepted: true,
+      electronicSignatureAccepted: true,
+      signatureData,
+      draftToken: draft.token,
+    }));
+    const encodedForm = new Response(formData);
+    const submitted = await json(await request("/api/registrations/submit", {
+      method: "POST",
+      headers: { "Content-Type": encodedForm.headers.get("content-type") },
+      body: await encodedForm.arrayBuffer(),
+    }));
+    assert.ok(submitted.registrationId && submitted.downloadUrl && submitted.scheduleUrl);
+
+    const agreement = await request(requestPath(submitted.downloadUrl));
+    assert.equal(agreement.status, 200);
+    assert.equal(agreement.headers.get("content-type"), "application/pdf");
+    assert.equal(new TextDecoder().decode((await agreement.arrayBuffer()).slice(0, 5)), "%PDF-");
+
+    const parentSchedulePath = requestPath(submitted.scheduleUrl).replace(/^\/schedule\//, "/api/schedule/");
+    const parentSchedule = await json(await request(parentSchedulePath));
+    assert.equal(parentSchedule.group.name, "Test Group");
+
+    const generated = await json(await request("/api/admin/schedule", { method: "POST", headers: adminHeaders, body: JSON.stringify({ action: "generate", yearId }) }));
+    assert.ok(generated.generated > 20);
+    const finalized = await json(await request("/api/admin/schedule", { method: "POST", headers: adminHeaders, body: JSON.stringify({ action: "finalize", yearId, name: "Test final schedule" }) }));
+    assert.equal(finalized.version, 1);
+    const schedulePdf = await request(`/api/admin/documents?kind=schedule&yearId=${encodeURIComponent(yearId)}&groupId=${encodeURIComponent(group.id)}`, { headers: { Cookie: cookie } });
+    assert.equal(schedulePdf.status, 200);
+    assert.equal(schedulePdf.headers.get("content-type"), "application/pdf");
+
+    const registrations = await json(await request(`/api/admin/registrations?yearId=${encodeURIComponent(yearId)}`, { headers: adminHeaders }));
+    assert.equal(registrations.students.some((student) => student.name === "Test Student"), true);
+    const versions = await json(await request(`/api/admin/agreement-versions?yearId=${encodeURIComponent(yearId)}`, { headers: adminHeaders }));
+    assert.equal(versions.versions[0].active, true);
+    const prompt = await json(await request("/api/admin/prompts", { method: "POST", headers: adminHeaders, body: JSON.stringify({ yearId, kind: "detail-sheet", style: "warm editorial", save: true, facts: { brandName: "The Choir Chug", schoolYear: "2026–2027", schedule: "Wednesdays", fees: "150₪", customBrief: "Test-only" } }) }));
+    assert.match(prompt.prompt, /FILES TO ATTACH BEFORE GENERATING/i);
+
+    const backup = await json(await request("/api/admin/backups", { method: "POST", headers: adminHeaders, body: JSON.stringify({ reason: "manual" }) }));
+    assert.ok(backup.id);
+    const backupList = await json(await request("/api/admin/backups", { headers: adminHeaders }));
+    assert.equal(backupList.backups.some((item) => item.id === backup.id && item.status === "ready"), true);
+  } finally {
+    await mf.dispose();
+  }
+});
