@@ -7,7 +7,7 @@ import { Miniflare } from "miniflare";
 
 const projectRoot = fileURLToPath(new URL("../", import.meta.url));
 const publicRoot = join(projectRoot, "public");
-const migrations = ["0000_fat_wilson_fisk.sql", "0001_calm_scarecrow.sql", "0002_sharp_skaar.sql", "0003_crazy_cammi.sql"];
+const migrations = ["0000_fat_wilson_fisk.sql", "0001_calm_scarecrow.sql", "0002_sharp_skaar.sql", "0003_crazy_cammi.sql", "0004_flippant_major_mapleleaf.sql"];
 const mimeTypes = new Map([[".png", "image/png"], [".jpg", "image/jpeg"], [".jpeg", "image/jpeg"], [".ttf", "font/ttf"], [".svg", "image/svg+xml"]]);
 
 async function staticAsset(request) {
@@ -156,6 +156,14 @@ test("registration, custom pricing, schedules, PDFs, admin data and backups work
     const planEvents = await json(await request(`/api/admin/schedule?yearId=${encodeURIComponent(yearId)}`, { headers: adminHeaders }));
     assert.equal(planEvents.events.filter((event) => event.source === "planned").length, 3, "the calendar plan must create planned sessions for the chosen dates");
 
+    await json(await request("/api/admin/groups", { method: "PATCH", headers: adminHeaders, body: JSON.stringify({ id: group.id, announcementTitle: "This week", announcementBody: "The session ends 10 minutes early." }) }));
+    const parentAfterUpdate = await json(await request(parentSchedulePath));
+    assert.equal(parentAfterUpdate.announcement.body, "The session ends 10 minutes early.");
+    assert.equal(parentAfterUpdate.announcementHistory.length, 1, "published updates must be recorded in the history");
+    const parentYearView = await json(await request(`${parentSchedulePath}?scope=year`));
+    assert.ok(parentYearView.year.startsOn, "the year scope must expose the school-year range for printing");
+    assert.ok(parentYearView.events.length >= 3, "the year scope must return the planned sessions");
+
     const generated = await json(await request("/api/admin/schedule", { method: "POST", headers: adminHeaders, body: JSON.stringify({ action: "generate", yearId }) }));
     assert.ok(generated.generated > 20);
     const finalized = await json(await request("/api/admin/schedule", { method: "POST", headers: adminHeaders, body: JSON.stringify({ action: "finalize", yearId, name: "Test final schedule" }) }));
@@ -192,6 +200,19 @@ test("registration, custom pricing, schedules, PDFs, admin data and backups work
     assert.ok(backup.id);
     const backupList = await json(await request("/api/admin/backups", { headers: adminHeaders }));
     assert.equal(backupList.backups.some((item) => item.id === backup.id && item.status === "ready"), true);
+
+    const agreementList = await json(await request(`/api/admin/agreement-versions?yearId=${encodeURIComponent(yearId)}`, { headers: adminHeaders }));
+    const baseVersion = agreementList.versions.find((item) => item.active);
+    const duplicated = await json(await request("/api/admin/agreement-versions", { method: "PATCH", headers: adminHeaders, body: JSON.stringify({ id: baseVersion.id, action: "duplicate" }) }));
+    assert.equal(duplicated.activated, false, "duplicating into a year with versions must not activate automatically");
+    await json(await request("/api/admin/agreement-versions", { method: "PATCH", headers: adminHeaders, body: JSON.stringify({ id: duplicated.id, action: "activate" }) }));
+    const configAfterActivate = await json(await request("/api/registration-config"));
+    assert.match(configAfterActivate.agreementVersion, new RegExp(`-v${duplicated.version}$`), "activating a version must switch new registrations to it");
+    const usedVersionDelete = await request(`/api/admin/agreement-versions?id=${encodeURIComponent(baseVersion.id)}`, { method: "DELETE", headers: adminHeaders });
+    assert.equal(usedVersionDelete.status, 409, "versions referenced by signed registrations must not be deletable");
+    const spare = await json(await request("/api/admin/agreement-versions", { method: "PATCH", headers: adminHeaders, body: JSON.stringify({ id: baseVersion.id, action: "duplicate" }) }));
+    const spareDelete = await json(await request(`/api/admin/agreement-versions?id=${encodeURIComponent(spare.id)}`, { method: "DELETE", headers: adminHeaders }));
+    assert.equal(spareDelete.deleted, true, "unused inactive versions must be deletable");
   } finally {
     await mf.dispose();
   }

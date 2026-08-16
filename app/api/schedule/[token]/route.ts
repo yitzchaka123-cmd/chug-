@@ -42,10 +42,12 @@ export async function GET(request: Request, context: { params: Promise<{ token: 
     const url = new URL(request.url);
     const nowMonth = new Intl.DateTimeFormat("en-CA", { year: "numeric", month: "2-digit", timeZone: "Asia/Jerusalem" }).format(new Date()).slice(0, 7);
     const month = /^\d{4}-\d{2}$/.test(url.searchParams.get("month") || "") ? url.searchParams.get("month")! : nowMonth;
-    const start = `${month}-01T00:00`;
+    const yearScope = url.searchParams.get("scope") === "year";
+    const yearRange = yearScope ? await runtime.DB.prepare(`SELECT starts_on, ends_on FROM school_years WHERE id = ? LIMIT 1`).bind(access.school_year_id).first<{ starts_on: string; ends_on: string }>() : null;
+    const start = yearRange ? `${yearRange.starts_on}T00:00` : `${month}-01T00:00`;
     const endDate = new Date(`${month}-01T12:00:00Z`);
     endDate.setUTCMonth(endDate.getUTCMonth() + 1);
-    const end = `${endDate.toISOString().slice(0, 10)}T00:00`;
+    const end = yearRange ? `${yearRange.ends_on}T23:59` : `${endDate.toISOString().slice(0, 10)}T00:00`;
     const events = access.group_id ? await runtime.DB.prepare(`
       SELECT id, kind, title_en, title_he, starts_at, ends_at, location, note, status
       FROM schedule_events WHERE school_year_id = ? AND group_id = ? AND starts_at >= ? AND starts_at < ?
@@ -60,10 +62,14 @@ export async function GET(request: Request, context: { params: Promise<{ token: 
       FROM schedule_events WHERE group_id = ? AND starts_at >= ? AND status = 'scheduled'
       ORDER BY starts_at LIMIT 1
     `).bind(access.group_id, new Date().toISOString().slice(0, 16)).first<Record<string, unknown>>() : null;
+    const history = access.group_id ? await runtime.DB.prepare(`
+      SELECT id, title, body, created_at FROM group_announcements WHERE group_id = ? ORDER BY created_at DESC LIMIT 20
+    `).bind(access.group_id).all<{ id: string; title: string | null; body: string; created_at: string }>() : { results: [] };
     return Response.json({
-      year: { id: access.school_year_id, name: access.year_name },
+      year: { id: access.school_year_id, name: access.year_name, startsOn: yearRange?.starts_on, endsOn: yearRange?.ends_on },
       group: access.group_id ? { id: access.group_id, name: access.group_name, startTime: access.start_time, endTime: access.end_time, location: access.location } : null,
       announcement: access.announcement_title || access.announcement_body ? { title: access.announcement_title, body: access.announcement_body, updatedAt: access.announcement_updated_at } : null,
+      announcementHistory: history.results.map((row) => ({ id: row.id, title: row.title, body: row.body, createdAt: row.created_at })),
       month, events: enriched, next,
     }, { headers: { "Cache-Control": "private, no-store", "Referrer-Policy": "no-referrer", "X-Robots-Tag": "noindex, nofollow" } });
   } catch (error) {

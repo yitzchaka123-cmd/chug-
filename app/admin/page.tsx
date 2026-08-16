@@ -128,7 +128,7 @@ export default function AdminSystem() {
       {tab === "calendar" && <CalendarPanel events={events} versions={versions} groups={groups} yearId={yearId} year={activeYear} mutate={mutate} reload={reload} toast={setToast} />}
       {tab === "payments" && <PaymentsPanel methods={methods} links={customLinks} groups={groups} yearId={yearId} year={activeYear} mutate={mutate} reload={reload} toast={setToast} />}
       {tab === "years" && <YearsPanel key={activeYear?.id || "year"} years={years} activeYear={activeYear} setYearId={setYearId} refreshYears={refreshYears} mutate={mutate} toast={setToast} />}
-      {tab === "agreements" && <AgreementsPanel yearId={yearId} year={activeYear} mutate={mutate} toast={setToast} />}
+      {tab === "agreements" && <AgreementsPanel yearId={yearId} year={activeYear} years={years} mutate={mutate} toast={setToast} />}
       {tab === "documents" && <DocumentsPanel yearId={yearId} groups={groups} toast={setToast} />}
       {tab === "creative" && <CreativePanel year={activeYear} yearId={yearId} toast={setToast} />}
       {tab === "history" && <HistoryPanel history={history} />}
@@ -314,6 +314,7 @@ function CalendarPanel({ events, versions, groups, yearId, year, mutate, reload,
         <label><span>Group</span><select value={effectivePlanGroupId} onChange={(event) => setPlanGroupId(event.target.value)}>{groups.length === 0 && <option value="">Create a group first</option>}{groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}</select></label>
         <label><span>Weekday</span><select value={planWeekday} onChange={(event) => reseed(Number(event.target.value))}>{weekdayNames.map((day, index) => <option key={day} value={index}>{day}</option>)}</select></label>
         <button className="secondary-button" onClick={() => reseed(planWeekday)}>Reset to every {weekdayNames[planWeekday]}</button>
+        <button className="secondary-button" onClick={async () => { if (!effectivePlanGroupId || !window.confirm(`Delete every planned session for ${planGroup?.name || "this group"}? Manually added or edited entries are kept, and the parent calendar updates immediately.`)) return; try { await mutate("/api/admin/schedule", { action: "apply-plan", yearId, groupId: effectivePlanGroupId, dates: [] }); setSelectedDates(new Set()); await reload("All planned sessions deleted from the live calendar."); } catch (error) { toast(error instanceof Error ? error.message : "The planned sessions could not be deleted."); } }}>Delete all planned sessions</button>
       </div>
       <div className="plan-toggles">
         <label><input type="checkbox" checked={showHolidaysEn} onChange={(event) => setShowHolidaysEn(event.target.checked)} /><span>English holiday names</span></label>
@@ -411,9 +412,13 @@ function YearsPanel({ years, activeYear, setYearId, refreshYears, mutate, toast 
   return <div className="admin-page-stack"><section className="admin-grid-cards year-card-grid">{years.map((year) => <article className={`admin-card year-card ${year.id === activeYear?.id ? "selected" : ""}`} key={year.id} onClick={() => setYearId(year.id)}><span className={`status-chip ${year.status === "active" ? "status-approved" : "status-proof-uploaded"}`}>{year.status}</span><h2>{year.name}</h2><p>{year.startsOn} → {year.endsOn}</p><dl className="card-details"><div><dt>Monthly</dt><dd>{money(year.monthlyFee)}</dd></div><div><dt>June</dt><dd>{money(year.juneFee)}</dd></div><div><dt>Schedule</dt><dd>{year.scheduleMode}</dd></div></dl>{year.status !== "active" && <button className="secondary-button" onClick={async (event) => { event.stopPropagation(); try { await mutate("/api/admin/years", { id: year.id, action: "activate" }, "PATCH"); await refreshYears(); toast(`${year.name} is now the active registration year.`); } catch (error) { toast(error instanceof Error ? error.message : "Year could not be activated."); } }}>Make current</button>}</article>)}</section>{edit && <section className="admin-card admin-form-card"><div className="admin-card-head"><div><p className="eyebrow">Selected year</p><h2>Edit {edit.name}</h2></div><p>Fees, proof rules and schedule setup are stored per year.</p></div><div className="compact-form-grid year-edit-form"><label><span>Name</span><input value={edit.name} onChange={(event) => setEdit({ ...edit, name: event.target.value })} /></label><label><span>Starts</span><input type="date" value={edit.startsOn} onChange={(event) => setEdit({ ...edit, startsOn: event.target.value })} /></label><label><span>Ends</span><input type="date" value={edit.endsOn} onChange={(event) => setEdit({ ...edit, endsOn: event.target.value })} /></label><label><span>Registration fee ₪</span><input type="number" value={edit.registrationFee} onChange={(event) => setEdit({ ...edit, registrationFee: Number(event.target.value) })} /></label><label><span>Monthly fee ₪</span><input type="number" value={edit.monthlyFee} onChange={(event) => setEdit({ ...edit, monthlyFee: Number(event.target.value) })} /></label><label><span>June fee ₪</span><input type="number" value={edit.juneFee} onChange={(event) => setEdit({ ...edit, juneFee: Number(event.target.value) })} /></label><label><span>Security check ₪</span><input type="number" value={securityCheck} onChange={(event) => setSecurityCheck(event.target.value)} /></label><label><span>Schedule setup</span><select value={edit.scheduleMode} onChange={(event) => setEdit({ ...edit, scheduleMode: event.target.value })}><option value="recurring">School-year recurring</option><option value="manual">Manual schedule</option></select></label><label><span>Window starts</span><input type="time" value={edit.startTime} onChange={(event) => setEdit({ ...edit, startTime: event.target.value })} /></label><label><span>Window ends</span><input type="time" value={edit.endTime} onChange={(event) => setEdit({ ...edit, endTime: event.target.value })} /></label><label className="switch-field"><span>Default proof required</span><button className={edit.proofRequired ? "setting-toggle on" : "setting-toggle"} onClick={() => setEdit({ ...edit, proofRequired: !edit.proofRequired })}><span /></button></label><button className="admin-primary" onClick={() => void saveYear()}>Save year</button></div></section>}<section className="admin-card admin-form-card"><div className="admin-card-head"><div><p className="eyebrow">Future-proofing</p><h2>Prepare the next school year</h2></div><p>Copy the current setup, then edit it without affecting ongoing or past records.</p></div><div className="compact-form-grid"><label><span>Year name</span><input placeholder="2027–2028" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></label><label><span>Starts</span><input type="date" value={form.startsOn} onChange={(event) => setForm({ ...form, startsOn: event.target.value })} /></label><label><span>Ends</span><input type="date" value={form.endsOn} onChange={(event) => setForm({ ...form, endsOn: event.target.value })} /></label><label><span>Copy setup from</span><select value={form.copyFromYearId} onChange={(event) => setForm({ ...form, copyFromYearId: event.target.value })}>{years.map((year) => <option key={year.id} value={year.id}>{year.name}</option>)}</select></label><button className="admin-primary" onClick={() => void create()}>Create prepared year</button></div></section></div>;
 }
 
-function AgreementsPanel({ yearId, year, mutate, toast }: { yearId: string; year?: Year; mutate: <T>(url: string, body: Record<string, unknown>, method?: string) => Promise<T>; toast: (message: string) => void }) {
+type AgreementVersionItem = { id: string; version: number; active: boolean; createdAt: string; contentHash: string; sections: AgreementSectionEditor[] };
+
+function AgreementsPanel({ yearId, year, years, mutate, toast }: { yearId: string; year?: Year; years: Year[]; mutate: <T>(url: string, body: Record<string, unknown>, method?: string) => Promise<T>; toast: (message: string) => void }) {
   const [sections, setSections] = useState<AgreementSectionEditor[]>([]);
-  const [versions, setVersions] = useState<Array<{ id: string; version: number; active: boolean; createdAt: string; contentHash: string }>>([]);
+  const [versions, setVersions] = useState<AgreementVersionItem[]>([]);
+  const [loadedVersionId, setLoadedVersionId] = useState("");
+  const [duplicateYearId, setDuplicateYearId] = useState("");
   const [loading, setLoading] = useState(true);
   const [publishing, setPublishing] = useState(false);
 
@@ -421,15 +426,40 @@ function AgreementsPanel({ yearId, year, mutate, toast }: { yearId: string; year
     if (!yearId) return;
     setLoading(true);
     try {
-      const result = await readJson<{ versions: Array<{ id: string; version: number; active: boolean; createdAt: string; contentHash: string; sections: AgreementSectionEditor[] }> }>(`/api/admin/agreement-versions?yearId=${encodeURIComponent(yearId)}`);
+      const result = await readJson<{ versions: AgreementVersionItem[] }>(`/api/admin/agreement-versions?yearId=${encodeURIComponent(yearId)}`);
       setVersions(result.versions);
-      setSections(result.versions.find((version) => version.active)?.sections || result.versions[0]?.sections || []);
+      const initial = result.versions.find((version) => version.active) || result.versions[0];
+      setLoadedVersionId(initial?.id || "");
+      setSections(initial ? structuredClone(initial.sections) : []);
     } catch (error) {
       toast(error instanceof Error ? error.message : "Agreement versions could not be loaded.");
     } finally {
       setLoading(false);
     }
   }, [toast, yearId]);
+
+  function loadVersion(version: AgreementVersionItem) {
+    setLoadedVersionId(version.id);
+    setSections(structuredClone(version.sections));
+    toast(`Version ${version.version} loaded into the editor. Publishing saves your edits as a new version.`);
+  }
+  async function activateVersion(version: AgreementVersionItem) {
+    if (!window.confirm(`Use version ${version.version} for all new ${year?.name || ""} registrations? Already-signed agreements are never changed.`)) return;
+    try { await mutate("/api/admin/agreement-versions", { id: version.id, action: "activate" }, "PATCH"); await load(); toast(`Version ${version.version} is now the active agreement.`); } catch (error) { toast(error instanceof Error ? error.message : "The version could not be activated."); }
+  }
+  async function duplicateVersion(version: AgreementVersionItem) {
+    const targetYearId = duplicateYearId || yearId;
+    const targetYear = years.find((item) => item.id === targetYearId);
+    try {
+      const result = await mutate<{ version: number; activated: boolean }>("/api/admin/agreement-versions", { id: version.id, action: "duplicate", targetYearId }, "PATCH");
+      await load();
+      toast(`Copied to ${targetYear?.name || "the selected year"} as version ${result.version}${result.activated ? " and set active" : ""}.`);
+    } catch (error) { toast(error instanceof Error ? error.message : "The version could not be duplicated."); }
+  }
+  async function removeVersion(version: AgreementVersionItem) {
+    if (!window.confirm(`Delete version ${version.version}? Only unused, inactive versions can be deleted.`)) return;
+    try { await readJson(`/api/admin/agreement-versions?id=${encodeURIComponent(version.id)}`, { method: "DELETE" }); await load(); toast(`Version ${version.version} deleted.`); } catch (error) { toast(error instanceof Error ? error.message : "The version could not be deleted."); }
+  }
 
   useEffect(() => { const timer = window.setTimeout(() => void load(), 0); return () => window.clearTimeout(timer); }, [load]);
 
@@ -462,7 +492,18 @@ function AgreementsPanel({ yearId, year, mutate, toast }: { yearId: string; year
     <section className="admin-card">
       <div className="admin-card-head"><div><p className="eyebrow">Version controlled</p><h2>{year?.name || "School year"} agreement</h2></div><button className="admin-primary" disabled={loading || publishing || !sections.length} onClick={() => void publish()}>{publishing ? "Publishing…" : "Publish new version"}</button></div>
       <p className="admin-muted">Edit the complete wording below. Publishing creates a new immutable version; it never changes documents that parents already signed. Custom fee links automatically place their exact pricing into the payment section.</p>
-      <div className="agreement-version-list">{versions.map((version) => <span key={version.id} className={version.active ? "status-chip status-approved" : "status-chip"}>v{version.version}{version.active ? " · active" : ""} · {new Date(version.createdAt).toLocaleDateString("en-GB")}</span>)}</div>
+      <div className="agreement-version-manager">
+        <label className="agreement-duplicate-target"><span>Duplicate into</span><select value={duplicateYearId || yearId} onChange={(event) => setDuplicateYearId(event.target.value)}>{years.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+        {versions.map((version) => <div className="agreement-version-row" key={version.id}>
+          <span className={version.active ? "status-chip status-approved" : "status-chip"}>v{version.version}{version.active ? " · active" : ""} · {new Date(version.createdAt).toLocaleDateString("en-GB")}</span>
+          <div className="card-actions">
+            <button onClick={() => loadVersion(version)} disabled={loadedVersionId === version.id}>{loadedVersionId === version.id ? "In the editor" : "Open in editor"}</button>
+            {!version.active && <button onClick={() => void activateVersion(version)}>Use for this year</button>}
+            <button onClick={() => void duplicateVersion(version)}>Duplicate</button>
+            {!version.active && <button onClick={() => void removeVersion(version)}>Delete</button>}
+          </div>
+        </div>)}
+      </div>
     </section>
     {loading ? <section className="admin-card"><p>Loading agreement…</p></section> : sections.map((section, sectionIndex) => <section className="admin-card admin-form-card" key={`${section.title}-${sectionIndex}`}>
       <label className="field"><span>Section heading</span><input value={section.title} onChange={(event) => updateSection(sectionIndex, { title: event.target.value })} /></label>

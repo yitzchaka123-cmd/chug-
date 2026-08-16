@@ -16,12 +16,12 @@ test("the generated PostgreSQL migration creates the complete schema", async () 
     for (const statement of statements) await db.exec(statement);
     const tables = await db.query("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name");
     const names = tables.rows.map((row) => row.table_name);
-    assert.equal(names.length, 24);
-    for (const required of ["school_years", "agreement_versions", "registrations", "students", "groups", "schedule_events", "payment_items", "backup_snapshots", "email_outbox"]) {
+    assert.equal(names.length, 25);
+    for (const required of ["school_years", "agreement_versions", "registrations", "students", "groups", "group_announcements", "schedule_events", "payment_items", "backup_snapshots", "email_outbox"]) {
       assert.ok(names.includes(required), `missing ${required}`);
     }
     const constraints = await db.query("SELECT count(*)::integer AS count FROM information_schema.table_constraints WHERE constraint_type = 'FOREIGN KEY'");
-    assert.equal(constraints.rows[0].count, 34);
+    assert.equal(constraints.rows[0].count, 35);
   } finally {
     await db.close();
   }

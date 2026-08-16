@@ -434,6 +434,16 @@ CREATE TABLE IF NOT EXISTS "admin_recovery_tokens" (
 
 -- statement-breakpoint;
 
+CREATE TABLE IF NOT EXISTS "group_announcements" (
+  "id" text PRIMARY KEY NOT NULL,
+  "group_id" text NOT NULL,
+  "title" text,
+  "body" text NOT NULL,
+  "created_at" text DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+-- statement-breakpoint;
+
 ALTER TABLE "enrollments" ADD COLUMN IF NOT EXISTS "group_id" text;
 
 -- statement-breakpoint;
@@ -603,6 +613,10 @@ ALTER TABLE "enrollments" ADD CONSTRAINT "enrollments_group_id_fk" FOREIGN KEY (
 -- statement-breakpoint;
 
 ALTER TABLE "admin_recovery_tokens" ADD CONSTRAINT "admin_recovery_tokens_admin_user_id_fk" FOREIGN KEY ("admin_user_id") REFERENCES "admin_users"("id") ON UPDATE NO ACTION ON DELETE CASCADE;
+
+-- statement-breakpoint;
+
+ALTER TABLE "group_announcements" ADD CONSTRAINT "group_announcements_group_id_fk" FOREIGN KEY ("group_id") REFERENCES "groups"("id") ON UPDATE NO ACTION ON DELETE CASCADE;
 
 -- statement-breakpoint;
 
@@ -895,5 +909,9 @@ CREATE INDEX IF NOT EXISTS "admin_recovery_tokens_user_expiry_idx" ON "admin_rec
 -- statement-breakpoint;
 
 CREATE INDEX IF NOT EXISTS "admin_recovery_tokens_expiry_consumed_idx" ON "admin_recovery_tokens" ("expires_at","consumed_at");
+
+-- statement-breakpoint;
+
+CREATE INDEX IF NOT EXISTS "group_announcements_group_created_idx" ON "group_announcements" ("group_id","created_at");
 
 -- statement-breakpoint;

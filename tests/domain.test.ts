@@ -114,3 +114,16 @@ test("PostgreSQL placeholder translation survives quoted literals", async () => 
     "INSERT INTO t (a) VALUES ($1) ON CONFLICT DO NOTHING",
   );
 });
+
+test("Beit Shemesh Shabbat times are computed within sane ranges", async () => {
+  const { candleLightingTime, shabbatEndTime, sunsetTime } = await import("@/lib/zmanim");
+  const summerSunset = sunsetTime("2026-06-21");
+  assert.ok(summerSunset && summerSunset >= "19:35" && summerSunset <= "20:05", `summer sunset ${summerSunset}`);
+  const winterSunset = sunsetTime("2026-12-25");
+  assert.ok(winterSunset && winterSunset >= "16:30" && winterSunset <= "17:00", `winter sunset ${winterSunset}`);
+  const candles = candleLightingTime("2026-09-04");
+  assert.ok(candles && candles >= "18:30" && candles <= "18:55", `candle lighting ${candles}`);
+  const shabbatEnds = shabbatEndTime("2026-09-05");
+  assert.ok(shabbatEnds && shabbatEnds >= "19:25" && shabbatEnds <= "19:55", `shabbat ends ${shabbatEnds}`);
+  assert.ok(shabbatEnds! > candles!, "Shabbat must end after candle lighting");
+});

@@ -114,11 +114,14 @@ export async function PATCH(request: Request) {
       return Response.json({ scheduleUrl: `${new URL(request.url).origin}/schedule/${encodeURIComponent(link.token)}` }, { headers: { "Cache-Control": "no-store" } });
     }
     const announcementChanged = body.announcementTitle !== undefined || body.announcementBody !== undefined;
-    await runtime.DB.batch([
+    const publishedBody = announcementChanged ? value(body.announcementBody, 1200) : "";
+    const statements = [
       runtime.DB.prepare(`UPDATE groups SET name = ?, age_min = ?, age_max = ?, weekday = ?, start_time = ?, end_time = ?, session_length_minutes = ?, location = ?, status = ?, announcement_title = ?, announcement_body = ?, announcement_updated_at = ?, updated_at = ? WHERE id = ?`).bind(value(body.name, 100) || group.name, body.ageMin === undefined ? group.age_min : number(body.ageMin), body.ageMax === undefined ? group.age_max : number(body.ageMax), body.weekday === undefined ? group.weekday : Math.min(6, Math.max(0, number(body.weekday, 3) || 3)), body.startTime === undefined ? group.start_time : value(body.startTime, 5) || null, body.endTime === undefined ? group.end_time : value(body.endTime, 5) || null, body.sessionLengthMinutes === undefined ? group.session_length_minutes : Math.min(180, Math.max(15, number(body.sessionLengthMinutes, 50) || 50)), body.location === undefined ? group.location : value(body.location, 160) || null, value(body.status, 30) || group.status, body.announcementTitle === undefined ? group.announcement_title : value(body.announcementTitle, 140) || null, body.announcementBody === undefined ? group.announcement_body : value(body.announcementBody, 1200) || null, announcementChanged ? now : group.announcement_updated_at, now, id),
       runtime.DB.prepare(`UPDATE enrollments SET group_label = ?, updated_at = ? WHERE group_id = ?`).bind(value(body.name, 100) || group.name, now, id),
       runtime.DB.prepare(`INSERT INTO audit_log (school_year_id, actor_type, actor_id, action, entity_type, entity_id, summary, changes_json, created_at) VALUES (?, 'admin', ?, 'group.updated', 'group', ?, 'Group settings updated', ?, ?)`).bind(group.school_year_id, admin.id, id, JSON.stringify({ fields: Object.keys(body).filter((key) => key !== "id") }), now),
-    ]);
+    ];
+    if (publishedBody) statements.push(runtime.DB.prepare(`INSERT INTO group_announcements (id, group_id, title, body, created_at) VALUES (?, ?, ?, ?, ?)`).bind(crypto.randomUUID(), id, value(body.announcementTitle, 140) || null, publishedBody, now));
+    await runtime.DB.batch(statements);
     return Response.json({ saved: true }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "Group could not be saved." }, { status: 500 });

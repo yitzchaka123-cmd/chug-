@@ -8,6 +8,7 @@ const sources = [
   "drizzle/0001_calm_scarecrow.sql",
   "drizzle/0002_sharp_skaar.sql",
   "drizzle/0003_crazy_cammi.sql",
+  "drizzle/0004_flippant_major_mapleleaf.sql",
 ];
 
 const createTables = [];

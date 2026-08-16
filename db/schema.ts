@@ -246,6 +246,22 @@ export const groups = sqliteTable(
   ],
 );
 
+export const groupAnnouncements = sqliteTable(
+  "group_announcements",
+  {
+    id: text("id").primaryKey(),
+    groupId: text("group_id")
+      .notNull()
+      .references(() => groups.id, { onDelete: "cascade" }),
+    title: text("title"),
+    body: text("body").notNull(),
+    createdAt: timestamp("created_at"),
+  },
+  (table) => [
+    index("group_announcements_group_created_idx").on(table.groupId, table.createdAt),
+  ],
+);
+
 export const enrollments = sqliteTable(
   "enrollments",
   {
