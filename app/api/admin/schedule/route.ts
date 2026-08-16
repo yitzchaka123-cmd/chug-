@@ -27,7 +27,7 @@ export async function GET(request: Request) {
       WHERE se.school_year_id = ? AND (? = '' OR se.group_id = ?) AND se.starts_at >= ? AND se.starts_at < ?
       ORDER BY se.starts_at, g.name
     `).bind(yearId, groupId, groupId, start, end).all<Record<string, unknown>>();
-    const versions = await runtime.DB.prepare(`SELECT id, version, name, status, finalized_at FROM schedule_versions WHERE school_year_id = ? ORDER BY version DESC`).bind(yearId).all<{ id: string; version: number; name: string; status: string; finalized_at: string }>();
+    const versions = await runtime.DB.prepare(`SELECT id, version, name, status, scope_json, finalized_at FROM schedule_versions WHERE school_year_id = ? ORDER BY version DESC LIMIT 12`).bind(yearId).all<{ id: string; version: number; name: string; status: string; scope_json: string; finalized_at: string }>();
     return Response.json({ events: events.results, versions: versions.results }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "Schedule could not be loaded." }, { status: 500 });
@@ -106,20 +106,19 @@ export async function POST(request: Request) {
       }
       statements.push(runtime.DB.prepare(`INSERT INTO audit_log (school_year_id, actor_type, actor_id, action, entity_type, entity_id, summary, changes_json, created_at) VALUES (?, 'admin', ?, 'schedule.plan_applied', 'group', ?, 'Calendar plan saved', ?, ?)`).bind(yearId, admin.id, groupId, JSON.stringify({ group: group.name, sessions: dates.length }), now));
       for (let offset = 0; offset < statements.length; offset += 80) await runtime.DB.batch(statements.slice(offset, offset + 80));
+
+      // Every save keeps its own restorable copy, so earlier plans stay available.
+      if (body.recordVersion !== false) {
+        const last = await runtime.DB.prepare(`SELECT MAX(version) AS version FROM schedule_versions WHERE school_year_id = ?`).bind(yearId).first<{ version: number | null }>();
+        const version = (last?.version || 0) + 1;
+        await runtime.DB.batch([
+          runtime.DB.prepare(`INSERT INTO schedule_versions (id, school_year_id, version, name, scope_json, snapshot_json, status, finalized_by, finalized_at, created_at) VALUES (?, ?, ?, ?, ?, ?, 'saved', ?, ?, ?)`).bind(
+            crypto.randomUUID(), yearId, version, `${group.name} · ${dates.length} sessions`,
+            JSON.stringify({ groupId, groupName: group.name, dates }), JSON.stringify(dates), admin.id, now, now),
+          runtime.DB.prepare(`DELETE FROM schedule_versions WHERE school_year_id = ? AND id NOT IN (SELECT id FROM schedule_versions WHERE school_year_id = ? ORDER BY version DESC LIMIT 12)`).bind(yearId, yearId),
+        ]);
+      }
       return Response.json({ saved: true, count: dates.length }, { headers: { "Cache-Control": "no-store" } });
-    }
-    if (action === "finalize") {
-      const events = await runtime.DB.prepare(`SELECT se.*, g.name AS group_name FROM schedule_events se LEFT JOIN groups g ON g.id = se.group_id WHERE se.school_year_id = ? ORDER BY se.starts_at, g.name`).bind(yearId).all<Record<string, unknown>>();
-      const last = await runtime.DB.prepare(`SELECT MAX(version) AS version FROM schedule_versions WHERE school_year_id = ?`).bind(yearId).first<{ version: number | null }>();
-      const version = (last?.version || 0) + 1;
-      const id = crypto.randomUUID();
-      const name = value(body.name, 100) || `Schedule v${version}`;
-      await runtime.DB.batch([
-        runtime.DB.prepare(`UPDATE schedule_versions SET status = 'superseded' WHERE school_year_id = ? AND status = 'finalized'`).bind(yearId),
-        runtime.DB.prepare(`INSERT INTO schedule_versions (id, school_year_id, version, name, scope_json, snapshot_json, status, finalized_by, finalized_at, created_at) VALUES (?, ?, ?, ?, ?, ?, 'finalized', ?, ?, ?)`).bind(id, yearId, version, name, JSON.stringify({ groupIds: body.groupIds || "all" }), JSON.stringify(events.results), admin.id, now, now),
-        runtime.DB.prepare(`INSERT INTO audit_log (school_year_id, actor_type, actor_id, action, entity_type, entity_id, summary, changes_json, created_at) VALUES (?, 'admin', ?, 'schedule.finalized', 'schedule_version', ?, 'Schedule finalized', ?, ?)`).bind(yearId, admin.id, id, JSON.stringify({ version, eventCount: events.results.length }), now),
-      ]);
-      return Response.json({ id, version }, { status: 201, headers: { "Cache-Control": "no-store" } });
     }
     const groupId = value(body.groupId, 80) || null;
     const date = value(body.date, 10);

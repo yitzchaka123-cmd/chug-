@@ -170,8 +170,11 @@ test("registration, custom pricing, schedules, PDFs, admin data and backups work
 
     const generated = await json(await request("/api/admin/schedule", { method: "POST", headers: adminHeaders, body: JSON.stringify({ action: "generate", yearId }) }));
     assert.ok(generated.generated > 20);
-    const finalized = await json(await request("/api/admin/schedule", { method: "POST", headers: adminHeaders, body: JSON.stringify({ action: "finalize", yearId, name: "Test final schedule" }) }));
-    assert.equal(finalized.version, 1);
+    const savedVersions = await json(await request(`/api/admin/schedule?yearId=${encodeURIComponent(yearId)}`, { headers: adminHeaders }));
+    assert.ok(savedVersions.versions.length >= 1, "saving a plan must keep a restorable version");
+    const restorable = JSON.parse(savedVersions.versions[0].scope_json || "{}");
+    assert.equal(restorable.groupId, group.id);
+    assert.equal(restorable.dates.length, 3, "the saved version keeps the exact dates that were applied");
     const schedulePdf = await request(`/api/admin/documents?kind=schedule&yearId=${encodeURIComponent(yearId)}&groupId=${encodeURIComponent(group.id)}`, { headers: { Cookie: cookie } });
     assert.equal(schedulePdf.status, 200);
     assert.equal(schedulePdf.headers.get("content-type"), "application/pdf");

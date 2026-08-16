@@ -13,7 +13,7 @@ type Unassigned = { enrollmentId: string; name: string; birthDate: string | null
 type PaymentMethod = { id: string; code: string; label: string; instructions: string; proofPolicy: "required" | "optional" | "none"; cashHandling: boolean; enabled: boolean; isDefault: boolean; sortOrder: number };
 type CustomLink = { id: string; label: string; groupName: string | null; monthlyFee: number | null; registrationFee: number | null; juneFee: number | null; oneTimeAmount: number | null; status: string; useCount: number; maxUses: number | null; expiresAt: string | null; url: string };
 type ScheduleEvent = { id: string; group_id: string | null; group_name?: string | null; title_en: string; title_he?: string | null; starts_at: string; ends_at?: string | null; location?: string | null; note?: string | null; status: string; kind: string; source?: string };
-type ScheduleVersion = { id: string; version: number; name: string; status: string; finalized_at: string };
+type ScheduleVersion = { id: string; version: number; name: string; status: string; scope_json: string; finalized_at: string };
 type CareDetail = { emergencyContactName?: string; emergencyContactPhone?: string; emergencyContactRelation?: string; allergies?: string; medicalInformation?: string; medications?: string; additionalNote?: string | null; emergencyName?: string; emergencyPhone?: string; emergencyRelation?: string; medical?: string };
 type Detail = { registration: { id: string; name: string; parents: { fatherName?: string; fatherPhone?: string; motherName?: string; motherPhone?: string; email?: string }; paymentMethod?: string; reviewStatus: string; proofStatus: string; studentStatus?: string; enrollmentId?: string; groupId?: string; privateNotes: string; care?: CareDetail | null }; payments: Array<{ id: string; periodKey: string; label: string; amountDue: number; amountPaid: number; status: string; paid: boolean; method?: string }>; history: Array<{ id: number; summary?: string; action: string; created_at: string }> };
 type HistoryItem = { id: number; summary: string | null; action: string; entityType: string; createdAt: string };
@@ -198,6 +198,8 @@ function CalendarPanel({ events, versions, groups, yearId, year, mutate, reload,
   const [previewOpen, setPreviewOpen] = useState(false);
   const [savingPlan, setSavingPlan] = useState(false);
   const [update, setUpdate] = useState({ title: "", body: "" });
+  const [notify, setNotify] = useState<{ title: string; body: string } | null>(null);
+  const [notifying, setNotifying] = useState(false);
   const initializedFor = useRef("");
 
   const effectivePlanGroupId = planGroupId || groups[0]?.id || "";
@@ -225,6 +227,37 @@ function CalendarPanel({ events, versions, groups, yearId, year, mutate, reload,
   const dayLookup = useMemo(() => new Map(monthGrids.flatMap((month) => month.days.map((day) => [day.date, day] as const))), [monthGrids]);
   const seedDates = useMemo(() => new Set(year ? recurringDates(year.startsOn, year.endsOn, planWeekday) : []), [year, planWeekday]);
   const orderedDates = useMemo(() => [...selectedDates].sort(), [selectedDates]);
+  const today = new Date().toISOString().slice(0, 10);
+  const yearHasStarted = useMemo(() => events.some((event) => event.starts_at.slice(0, 10) <= today), [events, today]);
+  function longDate(date: string) {
+    return new Date(`${date}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" });
+  }
+  function askToNotify(title: string, body: string) {
+    if (!yearHasStarted) return;
+    setNotify({ title, body });
+  }
+  async function restoreVersion(version: ScheduleVersion) {
+    let scope: { groupId?: string; groupName?: string; dates?: string[] } = {};
+    try { scope = JSON.parse(version.scope_json || "{}"); } catch { scope = {}; }
+    if (!scope.groupId || !Array.isArray(scope.dates)) { toast("This saved version cannot be restored."); return; }
+    if (!window.confirm(`Restore ${scope.groupName || "this group"}'s saved version with ${scope.dates.length} sessions? The parent calendar updates immediately.`)) return;
+    try {
+      await mutate("/api/admin/schedule", { action: "apply-plan", yearId, groupId: scope.groupId, dates: scope.dates });
+      setPlanGroupId(scope.groupId);
+      initializedFor.current = "";
+      await reload(`Restored ${scope.dates.length} sessions.`);
+    } catch (error) { toast(error instanceof Error ? error.message : "The saved version could not be restored."); }
+  }
+  async function sendNotice() {
+    if (!notify || !effectivePlanGroupId || notifying) return;
+    setNotifying(true);
+    try {
+      await mutate("/api/admin/groups", { id: effectivePlanGroupId, announcementTitle: notify.title, announcementBody: notify.body }, "PATCH");
+      setUpdate({ title: notify.title, body: notify.body });
+      setNotify(null);
+      await reload("Parents updated. The notice is at the top of their schedule page.");
+    } catch (error) { toast(error instanceof Error ? error.message : "The update could not be published."); } finally { setNotifying(false); }
+  }
 
   useEffect(() => {
     if (!effectivePlanGroupId || !year || initializedFor.current === effectivePlanGroupId) return;
@@ -256,8 +289,18 @@ function CalendarPanel({ events, versions, groups, yearId, year, mutate, reload,
     if (!effectivePlanGroupId || savingPlan) return;
     setSavingPlan(true);
     try {
+      const previousDates = new Set(events.filter((event) => event.group_id === effectivePlanGroupId && (event.source === "planned" || event.source === "recurring")).map((event) => event.starts_at.slice(0, 10)));
+      const added = orderedDates.filter((date) => !previousDates.has(date));
+      const removed = [...previousDates].filter((date) => !selectedDates.has(date)).sort();
       const result = await mutate<{ count: number }>("/api/admin/schedule", { action: "apply-plan", yearId, groupId: effectivePlanGroupId, dates: orderedDates });
       setPreviewOpen(false);
+      if (added.length || removed.length) {
+        askToNotify("Schedule update", [
+          removed.length ? `There is no choir on ${removed.map(longDate).join(", ")}.` : "",
+          added.length ? `We have added ${added.map(longDate).join(", ")}.` : "",
+          "The full updated calendar is on this page.",
+        ].filter(Boolean).join(" "));
+      }
       await reload(`${result.count} sessions saved. ${planGroup?.name || "The group"}'s parent calendar is updated live.`);
     } catch (error) { toast(error instanceof Error ? error.message : "The calendar plan could not be saved."); } finally { setSavingPlan(false); }
   }
@@ -291,20 +334,21 @@ function CalendarPanel({ events, versions, groups, yearId, year, mutate, reload,
       await reload(clear ? "Special update removed from the parent page." : "Special update published. Parents see it immediately.");
     } catch (error) { toast(error instanceof Error ? error.message : "The update could not be published."); }
   }
-  async function finalize() {
-    try {
-      const result = await mutate<{ version?: number }>("/api/admin/schedule", { action: "finalize", yearId });
-      await reload(`Snapshot ${result.version || ""} saved. The live calendar is unchanged.`);
-    } catch (error) { toast(error instanceof Error ? error.message : "Schedule could not be finalized."); }
-  }
   async function addEvent() { try { await mutate("/api/admin/schedule", { ...form, yearId }); setForm({ ...form, date: "", note: "" }); await reload("Calendar event added and visible to the selected group."); } catch (error) { toast(error instanceof Error ? error.message : "Event could not be added."); } }
   async function setEventStatus(event: ScheduleEvent, status: "cancelled" | "scheduled") { if (status === "cancelled" && !window.confirm(`Mark "${event.title_en}" as cancelled? Parents will see it as cancelled on their live schedule.`)) return; try { await mutate("/api/admin/schedule", { id: event.id, status }, "PATCH"); await reload(status === "cancelled" ? "Session cancelled. The parent schedule shows it live." : "Session restored to the schedule."); } catch (error) { toast(error instanceof Error ? error.message : "Session status could not be changed."); } }
-  async function removeEvent(event: ScheduleEvent) { if (!window.confirm(`Delete "${event.title_en}" from the calendar? This removes it from parent schedules entirely — cancelling keeps a visible record instead.`)) return; try { await readJson(`/api/admin/schedule?id=${encodeURIComponent(event.id)}`, { method: "DELETE" }); await reload("Calendar entry deleted."); } catch (error) { toast(error instanceof Error ? error.message : "Calendar entry could not be deleted."); } }
+  async function removeEvent(event: ScheduleEvent) {
+    if (!window.confirm(`Delete "${event.title_en}" from the calendar? This removes it from parent schedules entirely — cancelling keeps a visible record instead.`)) return;
+    try {
+      await readJson(`/api/admin/schedule?id=${encodeURIComponent(event.id)}`, { method: "DELETE" });
+      askToNotify("Schedule change", `${longDate(event.starts_at.slice(0, 10))} has been removed from the schedule. Please check the calendar for the updated dates.`);
+      await reload("Calendar entry deleted.");
+    } catch (error) { toast(error instanceof Error ? error.message : "Calendar entry could not be deleted."); }
+  }
 
   return <div className="admin-page-stack">
     <section className="admin-card schedule-toolbar">
       <div><p className="eyebrow">Schedule builder</p><h2>Plan the whole year on the calendar</h2><p>Pick a group and its weekday — every matching date turns green. Tap any day to remove it (it shows red) or to add an extra date, then preview, print, export and save.</p></div>
-      <div><button className="admin-primary" disabled={!effectivePlanGroupId} onClick={() => setPreviewOpen(true)}>Preview & save · {orderedDates.length} dates</button><button className="secondary-button" title="Stores a dated, numbered copy of the calendar as it looks right now, for your records. It does not change what parents see." onClick={() => void finalize()}>Save a dated snapshot</button><a className="secondary-button admin-link-button" href={`/api/admin/documents?kind=schedule&yearId=${encodeURIComponent(yearId)}${effectivePlanGroupId ? `&groupId=${encodeURIComponent(effectivePlanGroupId)}` : ""}`} download>Print saved schedule</a></div>
+      <div><button className="admin-primary" disabled={!effectivePlanGroupId} onClick={() => setPreviewOpen(true)}>Preview & save · {orderedDates.length} dates</button><a className="secondary-button admin-link-button" href={`/api/admin/documents?kind=schedule&yearId=${encodeURIComponent(yearId)}${effectivePlanGroupId ? `&groupId=${encodeURIComponent(effectivePlanGroupId)}` : ""}`} download>Print saved schedule</a></div>
     </section>
     <section className="admin-card plan-builder">
       <div className="plan-controls">
@@ -348,7 +392,8 @@ function CalendarPanel({ events, versions, groups, yearId, year, mutate, reload,
       </div>
     </section>}
     <section className="admin-card admin-form-card"><div className="admin-card-head"><div><p className="eyebrow">One-off update</p><h2>Add a session or note</h2></div></div><div className="compact-form-grid calendar-form"><label><span>Group</span><select value={form.groupId} onChange={(event) => setForm({ ...form, groupId: event.target.value })}><option value="">All groups</option>{groups.map((group) => <option value={group.id} key={group.id}>{group.name}</option>)}</select></label><label><span>Date</span><input type="date" value={form.date} onChange={(event) => setForm({ ...form, date: event.target.value })} /></label><label><span>Start</span><input type="time" value={form.startTime} onChange={(event) => setForm({ ...form, startTime: event.target.value })} /></label><label><span>End</span><input type="time" value={form.endTime} onChange={(event) => setForm({ ...form, endTime: event.target.value })} /></label><label><span>English title</span><input value={form.titleEn} onChange={(event) => setForm({ ...form, titleEn: event.target.value })} /></label><label><span>Hebrew title</span><input dir="rtl" value={form.titleHe} onChange={(event) => setForm({ ...form, titleHe: event.target.value })} /></label><label className="wide"><span>Note shown on the calendar day</span><textarea value={form.note} onChange={(event) => setForm({ ...form, note: event.target.value })} /></label><button className="admin-primary" onClick={() => void addEvent()}>Add to calendar</button></div></section>
-    <section className="admin-card"><div className="admin-card-head"><div><p className="eyebrow">Live calendar</p><h2>{events.length} scheduled entries</h2></div>{versions[0] && <span className="status-chip status-approved">Last snapshot v{versions[0].version}</span>}</div><div className="schedule-event-list">{events.slice(0, 120).map((event) => <article key={event.id}><time>{new Date(event.starts_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}<small>{event.starts_at.slice(11, 16)}</small></time><div><strong>{event.title_en}{event.title_he ? ` · ${event.title_he}` : ""}</strong><span>{[event.group_name, event.location, event.status === "cancelled" ? "Cancelled" : event.status].filter(Boolean).join(" · ")}</span>{event.note && <p>{event.note}</p>}</div><button onClick={async () => { const note = window.prompt("Edit the note shown to parents", event.note || ""); if (note === null) return; try { await mutate("/api/admin/schedule", { id: event.id, note }, "PATCH"); await reload("Calendar note updated live."); } catch (error) { toast(error instanceof Error ? error.message : "Note could not be updated."); } }}>Edit note</button>{event.status === "cancelled" ? <button onClick={() => void setEventStatus(event, "scheduled")}>Restore</button> : <button onClick={() => void setEventStatus(event, "cancelled")}>Cancel session</button>}<button onClick={() => void removeEvent(event)}>Delete</button></article>)}{events.length === 0 && <div className="admin-empty-state"><strong>No schedule entries yet</strong><p>Plan the year above, or add an event manually.</p></div>}</div></section>
+    <section className="admin-card"><div className="admin-card-head"><div><p className="eyebrow">Live calendar</p><h2>{events.length} scheduled entries</h2></div>{versions[0] && <span className="status-chip status-approved">Saved v{versions[0].version}</span>}</div><div className="schedule-event-list">{events.slice(0, 120).map((event) => <article key={event.id}><time>{new Date(event.starts_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}<small>{event.starts_at.slice(11, 16)}</small></time><div><strong>{event.title_en}{event.title_he ? ` · ${event.title_he}` : ""}</strong><span>{[event.group_name, event.location, event.status === "cancelled" ? "Cancelled" : event.status].filter(Boolean).join(" · ")}</span>{event.note && <p>{event.note}</p>}</div><button onClick={async () => { const note = window.prompt("Edit the note shown to parents", event.note || ""); if (note === null) return; try { await mutate("/api/admin/schedule", { id: event.id, note }, "PATCH"); await reload("Calendar note updated live."); } catch (error) { toast(error instanceof Error ? error.message : "Note could not be updated."); } }}>Edit note</button>{event.status === "cancelled" ? <button onClick={() => void setEventStatus(event, "scheduled")}>Restore</button> : <button onClick={() => void setEventStatus(event, "cancelled")}>Cancel session</button>}<button onClick={() => void removeEvent(event)}>Delete</button></article>)}{events.length === 0 && <div className="admin-empty-state"><strong>No schedule entries yet</strong><p>Plan the year above, or add an event manually.</p></div>}</div></section>
+    {versions.length > 0 && <section className="admin-card"><div className="admin-card-head"><div><p className="eyebrow">History</p><h2>Saved calendar versions</h2></div><p>Every save keeps a copy. Restore one to put those dates back on the parent calendar.</p></div><div className="history-table">{versions.map((version) => <article key={version.id}><span className="history-dot" /><div><strong>{version.name}</strong><small>Saved {new Date(version.finalized_at).toLocaleString("en-GB")}</small></div><button className="text-link" onClick={() => void restoreVersion(version)}>Restore</button><time>v{version.version}</time></article>)}</div></section>}
     {previewOpen && <Modal close={() => setPreviewOpen(false)}>
       <p className="eyebrow">Calendar plan</p>
       <h2>{planGroup?.name || "Group"} · {orderedDates.length} sessions</h2>
@@ -359,6 +404,19 @@ function CalendarPanel({ events, versions, groups, yearId, year, mutate, reload,
       })}{orderedDates.length === 0 && <p className="admin-muted">No dates are selected yet.</p>}</div>
       <div className="card-actions"><button className="secondary-button" onClick={printPlan}>Print</button><button className="secondary-button" onClick={exportCsv}>Export to Excel</button><button className="admin-primary" disabled={savingPlan || orderedDates.length === 0} onClick={() => void savePlan()}>{savingPlan ? "Saving…" : "Save to live calendar"}</button></div>
       <p className="admin-muted">Saving replaces {planGroup?.name || "the group"}’s planned sessions with these dates. Manually added or edited entries are kept, and the parent page updates immediately.</p>
+    </Modal>}
+    {notify && <Modal close={() => setNotify(null)}>
+      <p className="eyebrow">The choir year has started</p>
+      <h2>Tell the parents about this change?</h2>
+      <p className="admin-muted">The calendar is already updated either way. This only decides whether a notice appears at the top of {planGroup?.name || "the group"}’s schedule page.</p>
+      <div className="field-grid">
+        <label className="field field-wide"><span>Heading</span><input value={notify.title} onChange={(event) => setNotify({ ...notify, title: event.target.value })} /></label>
+        <label className="field field-wide"><span>Message parents will read</span><textarea className="admin-textarea" rows={5} value={notify.body} onChange={(event) => setNotify({ ...notify, body: event.target.value })} /></label>
+      </div>
+      <div className="card-actions">
+        <button className="admin-primary" disabled={notifying} onClick={() => void sendNotice()}>{notifying ? "Publishing…" : "Yes, tell the parents"}</button>
+        <button className="secondary-button" onClick={() => setNotify(null)}>No, just change it</button>
+      </div>
     </Modal>}
   </div>;
 }
