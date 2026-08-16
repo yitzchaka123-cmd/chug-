@@ -991,6 +991,14 @@ h2 { font-size: clamp(2.5rem, 4.8vw, 4.5rem); line-height: 0.98; }
 .confirm-modal h2 { margin: 0; font-size: 2rem; }.confirm-modal p { margin: 16px 0 26px; color: var(--muted); font-size: .78rem; line-height: 1.6; }
 .confirm-modal > div { display: flex; justify-content: center; gap: 9px; }
 .danger-button { min-height: 44px; border: 0; border-radius: 99px; padding: 0 18px; background: #a92e4a; color: white; cursor: pointer; font-size: .72rem; font-weight: 700; }
+.danger-button:disabled { background: #d8b6bf; cursor: not-allowed; }
+.drawer-danger { background: #fdf5f7; }
+.drawer-danger .drawer-section-title h3 { color: #a92e4a; }
+.drawer-danger .danger-button { width: 100%; margin-top: 14px; }
+.delete-confirm-field { display: block; margin: 0 0 24px; text-align: left; }
+.delete-confirm-field span { display: block; margin-bottom: 7px; color: var(--muted); font-size: .74rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.delete-confirm-field input { width: 100%; min-height: 46px; padding: 0 14px; border: 1px solid #e3d7db; border-radius: 12px; background: white; font: inherit; font-size: .95rem; letter-spacing: .08em; }
+.delete-confirm-field input:focus-visible { outline: 2px solid #a92e4a; outline-offset: 1px; }
 .payment-settings-modal h2 { margin-bottom: 20px; }
 .setting-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 25px; padding: 20px; border: 1px solid #e3d9dc; border-radius: 15px; background: #fbf8f9; }
 .setting-row strong { color: #4f3d44; font-size: .82rem; }

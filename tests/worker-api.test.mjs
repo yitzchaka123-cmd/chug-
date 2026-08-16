@@ -247,6 +247,22 @@ test("registration, custom pricing, schedules, PDFs, admin data and backups work
     const spare = await json(await request("/api/admin/agreement-versions", { method: "PATCH", headers: adminHeaders, body: JSON.stringify({ id: baseVersion.id, action: "duplicate" }) }));
     const spareDelete = await json(await request(`/api/admin/agreement-versions?id=${encodeURIComponent(spare.id)}`, { method: "DELETE", headers: adminHeaders }));
     assert.equal(spareDelete.deleted, true, "unused inactive versions must be deletable");
+
+    const removable = await json(await request("/api/admin/students", { method: "POST", headers: adminHeaders, body: JSON.stringify({ name: "Removable Student", birthDate: "2015-04-04", groupId: group.id, phone: "0500000000", yearId }) }));
+    assert.ok(removable.registrationId, "a manual student must be created before it can be deleted");
+    const removableDetail = await json(await request(`/api/admin/registrations/${encodeURIComponent(removable.registrationId)}`, { headers: adminHeaders }));
+    assert.ok(removableDetail.payments.length > 0, "the manual student starts with a payment ledger");
+    const unconfirmedDelete = await request(`/api/admin/registrations/${encodeURIComponent(removable.registrationId)}`, { method: "DELETE", headers: adminHeaders, body: JSON.stringify({ confirmation: "yes" }) });
+    assert.equal(unconfirmedDelete.status, 400, "deleting a student must require the typed confirmation");
+    const deletedStudent = await json(await request(`/api/admin/registrations/${encodeURIComponent(removable.registrationId)}`, { method: "DELETE", headers: adminHeaders, body: JSON.stringify({ confirmation: "DELETE" }) }));
+    assert.equal(deletedStudent.deleted, true);
+    const goneDetail = await request(`/api/admin/registrations/${encodeURIComponent(removable.registrationId)}`, { headers: adminHeaders });
+    assert.equal(goneDetail.status, 404, "a deleted student must no longer be readable");
+    const listAfterDelete = await json(await request(`/api/admin/registrations?yearId=${encodeURIComponent(yearId)}`, { headers: adminHeaders }));
+    assert.equal(listAfterDelete.students.some((student) => student.name === "Removable Student"), false, "the deleted student must disappear from the student list");
+    assert.equal(listAfterDelete.students.some((student) => student.name === "Test Student"), true, "deleting one student must leave the others untouched");
+    const historyAfterDelete = await json(await request(`/api/admin/history?yearId=${encodeURIComponent(yearId)}`, { headers: adminHeaders }));
+    assert.equal(historyAfterDelete.history.some((item) => item.action === "student.deleted"), true, "the deletion must be recorded in activity history");
   } finally {
     await mf.dispose();
   }

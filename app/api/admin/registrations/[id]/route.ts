@@ -156,3 +156,57 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     return Response.json({ error: error instanceof Error ? error.message : "Registration could not be changed." }, { status: 500 });
   }
 }
+
+export async function DELETE(request: Request, context: { params: Promise<{ id: string }> }) {
+  try {
+    const runtime = getRuntimeEnv();
+    const admin = await requireAdminSession(request, runtime);
+    if (!admin) return Response.json({ error: "Administrator sign-in required." }, { status: 401 });
+    const { id } = await context.params;
+    const body = await request.json().catch(() => ({})) as Record<string, unknown>;
+    if (typeof body.confirmation !== "string" || body.confirmation.trim().toUpperCase() !== "DELETE") {
+      return Response.json({ error: "Type DELETE to remove this student permanently." }, { status: 400 });
+    }
+    const registration = await runtime.DB.prepare(`
+      SELECT r.id, r.school_year_id, r.participant_full_name, s.id AS student_id
+      FROM registrations r LEFT JOIN students s ON s.created_from_registration_id = r.id
+      WHERE r.id = ? LIMIT 1
+    `).bind(id).first<{ id: string; school_year_id: string; participant_full_name: string; student_id: string | null }>();
+    if (!registration) return Response.json({ error: "Registration not found." }, { status: 404 });
+    const studentId = registration.student_id;
+    const enrollments = await runtime.DB.prepare(`SELECT id FROM enrollments WHERE registration_id = ?${studentId ? " OR student_id = ?" : ""}`)
+      .bind(...(studentId ? [id, studentId] : [id])).all<{ id: string }>();
+    const files = await runtime.DB.prepare(`SELECT storage_key FROM stored_files WHERE registration_id = ?`).bind(id).all<{ storage_key: string }>();
+    const now = new Date().toISOString();
+    const statements: D1PreparedStatement[] = [];
+    for (const enrollment of enrollments.results) {
+      statements.push(runtime.DB.prepare(`DELETE FROM payment_items WHERE enrollment_id = ?`).bind(enrollment.id));
+    }
+    statements.push(
+      runtime.DB.prepare(`DELETE FROM payment_items WHERE registration_id = ?`).bind(id),
+      runtime.DB.prepare(`DELETE FROM signed_agreements WHERE registration_id = ?`).bind(id),
+      runtime.DB.prepare(`DELETE FROM registration_section_approvals WHERE registration_id = ?`).bind(id),
+      runtime.DB.prepare(`DELETE FROM email_outbox WHERE registration_id = ?`).bind(id),
+      runtime.DB.prepare(`DELETE FROM stored_files WHERE registration_id = ?`).bind(id),
+      runtime.DB.prepare(`DELETE FROM enrollments WHERE registration_id = ?`).bind(id),
+    );
+    if (studentId) {
+      statements.push(
+        runtime.DB.prepare(`DELETE FROM enrollments WHERE student_id = ?`).bind(studentId),
+        runtime.DB.prepare(`DELETE FROM students WHERE id = ?`).bind(studentId),
+      );
+    }
+    statements.push(
+      runtime.DB.prepare(`DELETE FROM registrations WHERE id = ?`).bind(id),
+      runtime.DB.prepare(`INSERT INTO audit_log (school_year_id, actor_type, actor_id, action, entity_type, entity_id, summary, changes_json, created_at) VALUES (?, 'admin', ?, 'student.deleted', 'registration', ?, ?, ?, ?)`)
+        .bind(registration.school_year_id, admin.id, id, `${registration.participant_full_name} deleted permanently`, JSON.stringify({ name: registration.participant_full_name, enrollments: enrollments.results.length, files: files.results.length }), now),
+    );
+    await runtime.DB.batch(statements);
+    for (const file of files.results) {
+      await runtime.BUCKET.delete(file.storage_key).catch(() => undefined);
+    }
+    return Response.json({ deleted: true, name: registration.participant_full_name }, { headers: { "Cache-Control": "no-store" } });
+  } catch (error) {
+    return Response.json({ error: error instanceof Error ? error.message : "Student could not be deleted." }, { status: 500 });
+  }
+}
