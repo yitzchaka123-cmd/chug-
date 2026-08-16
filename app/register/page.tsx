@@ -70,6 +70,18 @@ export default function RegistrationPreview() {
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawing = useRef(false);
+  const stepperRef = useRef<HTMLOListElement>(null);
+  const skipFirstStepScroll = useRef(true);
+
+  // Moving between parts of the form should start the new part at the top of
+  // the screen, not wherever the previous part happened to end.
+  useEffect(() => {
+    if (skipFirstStepScroll.current) { skipFirstStepScroll.current = false; return; }
+    const node = stepperRef.current;
+    if (!node) return;
+    const target = Math.max(0, node.getBoundingClientRect().top + window.scrollY - 12);
+    window.scrollTo({ top: target, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+  }, [step]);
 
   useEffect(() => {
     let active = true;
@@ -379,7 +391,7 @@ export default function RegistrationPreview() {
         <p>{customOfferLabel ? `Private registration arrangement: ${customOfferLabel}. ` : ""}You’ll review the complete agreement before signing.</p>
       </section>
 
-      <ol className="form-stepper" aria-label="Registration progress">
+      <ol className="form-stepper" aria-label="Registration progress" ref={stepperRef}>
         {steps.map((label, index) => (
           <li className={index === step ? "active" : index < step ? "done" : ""} key={label}>
             <button type="button" onClick={() => index <= step && setStep(index)}><span>{index < step ? "✓" : index + 1}</span>{label}</button>
@@ -401,7 +413,7 @@ export default function RegistrationPreview() {
                 <label className="field"><span>Father’s phone</span><input inputMode="tel" value={form.fatherPhone} onChange={(event) => update("fatherPhone", event.target.value)} /></label>
                 <label className="field"><span>Mother’s name</span><input value={form.mother} onChange={(event) => update("mother", event.target.value)} /></label>
                 <label className="field"><span>Mother’s phone</span><input inputMode="tel" value={form.motherPhone} onChange={(event) => update("motherPhone", event.target.value)} /></label>
-                <label className="field field-wide"><span>Email for your agreement copy</span><input required type="email" value={form.email} onChange={(event) => update("email", event.target.value)} placeholder="parent@example.com" /></label>
+                <label className="field field-wide"><span>Parent email address</span><input required type="email" value={form.email} onChange={(event) => update("email", event.target.value)} placeholder="parent@example.com" /></label>
                 {homeAddressEnabled && <label className="field field-wide"><span>Home address</span><input value={form.address} onChange={(event) => update("address", event.target.value)} /></label>}
                 {schoolEnabled && <label className="field field-wide"><span>School</span><input value={form.school} onChange={(event) => update("school", event.target.value)} /></label>}
               </div>
@@ -564,7 +576,7 @@ export default function RegistrationPreview() {
             <span className="save-link-icon">✓</span>
             <p className="eyebrow">Progress saved</p>
             <h2 id="save-link-title">Save this link to continue registering your child</h2>
-            <p>Open it any time in the next 30 days and you’ll be right back where you stopped{form.email.trim() ? " - we’ve also queued it to your email" : ""}.</p>
+            <p>Open it any time in the next 30 days and you’ll be right back where you stopped.</p>
             <input className="save-link-field" readOnly value={resumeUrl} onFocus={(event) => event.currentTarget.select()} aria-label="Your private return link" />
             <div className="save-link-actions">
               <button className="button" type="button" onClick={async () => { await navigator.clipboard.writeText(resumeUrl).catch(() => undefined); setSaveLinkOpen(false); setSaved("Return link copied"); }}>Copy link</button>

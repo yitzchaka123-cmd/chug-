@@ -28,7 +28,7 @@ export const legalDocuments = {
       {
         heading: "Who is responsible for the information",
         paragraphs: [
-          `${legalDetails.operator}, ${legalDetails.location}, is responsible for the registration database. Privacy questions and requests may be made by phone at ${legalDetails.phone}. A dedicated privacy email, service address and the operator’s full registered-business details must be added before public registration opens.`,
+          `${legalDetails.operator}, ${legalDetails.location}, is responsible for the registration database. Privacy questions and requests may be made by phone at ${legalDetails.phone}.`,
         ],
       },
       {
@@ -38,7 +38,7 @@ export const legalDocuments = {
           "Emergency contacts, allergies, medical information and accessibility or assistance needs supplied for the participant’s safety.",
           "Registration answers, group placement, schedule information, private administrative notes and communication history.",
           "Payment method, payment status, transaction reference and any payment-proof image a parent chooses to upload.",
-          "Agreement version, paragraph approvals, parent declaration, electronic signature and delivery record.",
+          "Agreement version, paragraph approvals, parent declaration, electronic signature and the signed document record.",
           "Security and audit information such as date, time, IP address, device information and administrator activity.",
         ],
       },
@@ -68,7 +68,7 @@ export const legalDocuments = {
       {
         heading: "Who may receive information",
         paragraphs: [
-          "Information may be accessed only by authorized Choir Chug administrators and by service providers needed for hosting, private file storage, email delivery, security, backups and technical support. Professional advisers or public authorities may receive information where reasonably necessary or legally required. Personal information is not sold. Provider names, storage countries and any overseas safeguards must be listed here before public registration opens.",
+          "Information may be accessed only by authorized Choir Chug administrators and by service providers needed for hosting, private file storage, security, backups and technical support. Professional advisers or public authorities may receive information where reasonably necessary or legally required. Personal information is not sold. Provider names, storage countries and any overseas safeguards must be listed here before public registration opens.",
         ],
       },
       {
@@ -80,7 +80,7 @@ export const legalDocuments = {
       {
         heading: "Security",
         paragraphs: [
-          "The live system is intended to use protected administrator access, automatic logout, encrypted transmission and storage, private uploads, access logging, rate limits, backups and restricted exports. No internet service can promise absolute security. Parents should not send medical details or payment screenshots through ordinary email unless specifically instructed through a secure process.",
+          "The live system is intended to use protected administrator access, automatic logout, encrypted transmission and storage, private uploads, access logging, rate limits, backups and restricted exports. No internet service can promise absolute security. Parents should not send medical details or payment screenshots through ordinary messaging unless specifically instructed through a secure process.",
         ],
       },
       {
@@ -112,7 +112,7 @@ export const legalDocuments = {
       {
         heading: "Operator and contact",
         paragraphs: [
-          `${legalDetails.operator}, ${legalDetails.location}. Telephone: ${legalDetails.phone}. Full registered-business identification, service address and a service email must be published before registration is opened to the public.`,
+          `${legalDetails.operator}, ${legalDetails.location}. Telephone: ${legalDetails.phone}. Registration questions and requests are handled by phone or written message.`,
         ],
       },
       {
@@ -145,7 +145,7 @@ export const legalDocuments = {
       {
         heading: "Electronic agreement",
         paragraphs: [
-          "The parent will be asked to confirm each agreement section, state an intention to sign electronically and add a signature. The system will retain the school year, agreement version, timestamps and audit record, and provide the completed document to the parent. A signed agreement will not be silently changed; a material change requires a new version and renewed approval.",
+          "The parent will be asked to confirm each agreement section, state an intention to sign electronically and add a signature. The system will retain the school year, agreement version, timestamps and audit record, and the completed document is available to download at the end of registration. A signed agreement will not be silently changed; a material change requires a new version and renewed approval.",
         ],
       },
       {
@@ -212,7 +212,7 @@ export const legalDocuments = {
       {
         heading: "Accessibility contact",
         paragraphs: [
-          `If you encounter a barrier or need an accessible alternative, please call Nechama at ${legalDetails.phone}. Please describe the page, action and device involved. A dedicated accessibility email and the statement’s formal review date will be added before launch.`,
+          `If you encounter a barrier or need an accessible alternative, please call Nechama at ${legalDetails.phone}. Please describe the page, action and device involved.`,
         ],
       },
     ],
