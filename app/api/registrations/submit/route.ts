@@ -71,6 +71,9 @@ function calculateAge(birthDate: string) {
 }
 
 function jsonError(error: string, status = 400) {
+  // Rejections are otherwise invisible in hosting logs, which makes a parent
+  // reporting "it would not submit" impossible to diagnose.
+  console.warn(`registration.submit rejected (${status}): ${error}`);
   return Response.json({ error }, { status, headers: { "Cache-Control": "no-store" } });
 }
 

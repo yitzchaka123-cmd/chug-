@@ -1422,3 +1422,10 @@ h2 { font-size: clamp(2.5rem, 4.8vw, 4.5rem); line-height: 0.98; }
 /* Registration fee highlighted as the amount due at registration */
 .payment-total.registration-payment { border-color: rgba(143, 24, 56, 0.32); background: linear-gradient(150deg, #fbeef1, #fff); }
 .payment-total.registration-payment strong { color: var(--wine-dark); }
+
+/* Something from an earlier step still needs the parent's attention */
+.missing-step-notice { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 18px; padding: 16px 18px; border: 1px solid rgba(143, 24, 56, .28); border-radius: 16px; background: #fdf1f3; }
+.missing-step-notice strong { display: block; color: var(--wine-dark); font-size: .95rem; }
+.missing-step-notice p { margin: 4px 0 0; color: #6b5158; font-size: .86rem; }
+.missing-step-notice button { flex: 0 0 auto; border: 0; border-radius: 999px; background: var(--wine); color: #fff; padding: 11px 20px; font-size: .82rem; font-weight: 730; cursor: pointer; }
+.missing-step-notice button:hover { background: var(--wine-dark); }

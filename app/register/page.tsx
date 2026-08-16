@@ -7,6 +7,14 @@ import { choirConfig } from "../site-config";
 
 const steps = ["Details", "Care", "Agreement", "Payment", "Review & sign"];
 
+function friendlyError(error: unknown, fallback: string) {
+  const message = error instanceof Error ? error.message : "";
+  if (error instanceof TypeError || !message || /failed to fetch|load failed|networkerror|network request failed/i.test(message)) {
+    return "We couldn’t reach the server. Check your internet connection and try again.";
+  }
+  return message || fallback;
+}
+
 export default function RegistrationPreview() {
   const [step, setStep] = useState(0);
   const [saved, setSaved] = useState("");
@@ -133,13 +141,13 @@ export default function RegistrationPreview() {
           const draftOffer = typeof result.data.offerToken === "string" ? result.data.offerToken.trim() : "";
           if (draftOffer) offer = draftOffer;
         } catch (error) {
-          if (active) setSubmissionError(error instanceof Error ? error.message : "Saved progress could not be loaded.");
+          if (active) setSubmissionError(friendlyError(error, "Saved progress could not be loaded."));
         }
       }
       try {
         await loadConfig(offer);
       } catch (error) {
-        if (active) setSubmissionError(error instanceof Error ? error.message : "Registration settings could not be loaded.");
+        if (active) setSubmissionError(friendlyError(error, "Registration settings could not be loaded."));
         return;
       }
       if (!active) return;
@@ -242,6 +250,7 @@ export default function RegistrationPreview() {
     securityCheckMonths: paymentAmounts.securityCheckMonths,
   };
   const activeApprovalSections = activeAgreementSections.filter((section) => section.title !== "Introduction");
+  const paymentLabel = paymentAmounts.registration > 0 ? "registration fee payment" : "payment";
   const selectedMethod = paymentMethodRecords.find((method) => method.label === form.method);
   const isCashMethod = selectedMethod ? selectedMethod.cashHandling : form.method === "Cash";
   const paymentRequiresProof = !isCashMethod && (selectedMethod ? selectedMethod.proofPolicy === "required" : proofUploadRequired);
@@ -259,7 +268,23 @@ export default function RegistrationPreview() {
     (step !== 1 || careComplete) &&
     (step !== 2 || approvals.every(Boolean)) &&
     (step !== 3 || (securityCheckAccepted && (!paymentRequiresProof || Boolean(proofName))));
+  // Anything still missing from an earlier part of the form. Uploads in
+  // particular cannot be kept when progress is saved, so a parent who returns
+  // to a saved registration has to pick the screenshot again.
+  const missingStep = (() => {
+    if (!detailsComplete) return { step: 0, message: "Please finish the participant and parent details before signing." };
+    if (!careComplete) return { step: 1, message: "Please complete the emergency contact details before signing." };
+    if (!approvals.length || !approvals.every(Boolean)) return { step: 2, message: "Please approve each part of the registration before signing." };
+    if (!securityCheckAccepted) return { step: 3, message: "Please confirm the security check on the payment step before signing." };
+    if (paymentRequiresProof && !proofFile) return { step: 3, message: `Please choose the ${paymentLabel} screenshot again - uploads are not kept when you save your progress.` };
+    return null;
+  })();
   const canComplete = Boolean(signatureData) && form.signer.trim().length > 1 && finalConsent;
+  function goFixMissing() {
+    if (!missingStep) return;
+    setSubmissionError(missingStep.message);
+    setStep(missingStep.step);
+  }
   const wideStep = step === 2 || step === 4;
   const signingDate = useMemo(() => new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Jerusalem" }).format(new Date()), []);
 
@@ -293,6 +318,7 @@ export default function RegistrationPreview() {
 
   async function submitRegistration() {
     if (!canComplete || submitting) return;
+    if (missingStep) { goFixMissing(); return; }
     setSubmitting(true);
     setSubmissionError("");
 
@@ -322,7 +348,7 @@ export default function RegistrationPreview() {
       setScheduleUrl(result.scheduleUrl || "");
       setComplete(true);
     } catch (error) {
-      setSubmissionError(error instanceof Error ? error.message : "Registration could not be completed. Please try again.");
+      setSubmissionError(friendlyError(error, "Registration could not be completed. Please try again."));
     } finally {
       setSubmitting(false);
     }
@@ -347,7 +373,7 @@ export default function RegistrationPreview() {
       setResumeUrl(`${window.location.origin}${result.resumeUrl}`);
       setSaveLinkOpen(true);
     } catch (error) {
-      setSubmissionError(error instanceof Error ? error.message : "Progress could not be saved.");
+      setSubmissionError(friendlyError(error, "Progress could not be saved."));
     } finally {
       setSavingDraft(false);
     }
@@ -499,6 +525,7 @@ export default function RegistrationPreview() {
           {step === 4 && (
             <div className="form-section">
               <div className="form-section-title"><span>05</span><div><h2>Review & sign</h2><p>Review the exact agreement you approved, then add the parent’s signature.</p></div></div>
+              {missingStep && <aside className="missing-step-notice" role="alert"><div><strong>One thing left</strong><p>{missingStep.message}</p></div><button type="button" onClick={goFixMissing}>Take me there</button></aside>}
               <div className="document-toolbar"><span>A4 agreement preview · {activeAgreementVersion}</span><button type="button" onClick={() => setStep(2)}>← Return to agreement approvals</button></div>
               <div className="document-preview a4-contract">
                 <header className="contract-header"><img src={choirConfig.brand.logo} alt="The Choir Chug" /><h3>Registration & Agreement Form</h3><p>{registrationYear}</p></header>
