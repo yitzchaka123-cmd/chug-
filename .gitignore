@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+
+# Builds
+.next/
+dist/
+out/
+tsconfig.tsbuildinfo
+next-env.d.ts
+
+# Local runtime state
+.sites-runtime/
+.wrangler/
+
+# Environment and secrets — never commit real participant data or keys
+.env
+.env.*
+!.env.example
+
+# Editor and OS noise
+.DS_Store
+*.log

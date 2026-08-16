@@ -6,7 +6,7 @@ import { encryptJson } from "@/lib/security";
 export const dynamic = "force-dynamic";
 
 function value(input: unknown, max = 600) { return typeof input === "string" ? input.trim().slice(0, max) : ""; }
-function agorot(input: unknown) { const parsed = Number(input); return Number.isFinite(parsed) && parsed >= 0 ? Math.round(parsed * 100) : null; }
+function agorot(input: unknown) { if (input === null || input === undefined || (typeof input === "string" && !input.trim())) return null; const parsed = Number(input); return Number.isFinite(parsed) && parsed >= 0 ? Math.round(parsed * 100) : null; }
 
 type LinkRow = {
   id: string; school_year_id: string; group_id: string | null; label: string; token_ciphertext: string;
