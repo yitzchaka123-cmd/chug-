@@ -179,6 +179,7 @@ export function createVercelRuntime(): ChoirRuntimeEnv {
     CHOIR_DATA_KEY: dataKey,
     CHOIR_TOKEN_SECRET: tokenSecret,
     CHOIR_ADMIN_PASSCODE: administratorPasscode,
+    CHOIR_ADMIN_RESET_PASSCODE: process.env.CHOIR_ADMIN_RESET_PASSCODE,
     RESEND_API_KEY: process.env.RESEND_API_KEY,
     CHOIR_FROM_EMAIL: process.env.CHOIR_FROM_EMAIL,
   };

@@ -7,6 +7,7 @@ interface Env {
   ASSETS: Fetcher;
   BUCKET: R2Bucket;
   CHOIR_ADMIN_PASSCODE: string;
+  CHOIR_ADMIN_RESET_PASSCODE?: string;
   CHOIR_DATA_KEY: string;
   CHOIR_TOKEN_SECRET: string;
   RESEND_API_KEY?: string;

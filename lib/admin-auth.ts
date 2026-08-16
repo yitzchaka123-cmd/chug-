@@ -159,6 +159,17 @@ export async function createAdminSession(request: Request, runtime: ChoirRuntime
   } else {
     const candidate = await derivePasscode(passcode, admin.passcode_salt);
     valid = constantTimeEqual(candidate, admin.passcode_hash);
+    // Break-glass access when the passcode is forgotten. Only works while the
+    // owner has deliberately set CHOIR_ADMIN_RESET_PASSCODE in the hosting
+    // dashboard, and it is still rate limited like any other attempt.
+    const resetPasscode = runtime.CHOIR_ADMIN_RESET_PASSCODE || "";
+    if (!valid && resetPasscode.length >= 8 && constantTimeEqual(passcode, resetPasscode)) {
+      valid = true;
+      await runtime.DB.prepare(`
+        INSERT INTO audit_log (actor_type, actor_id, action, entity_type, entity_id, summary, created_at)
+        VALUES ('admin', ?, 'admin.reset_passcode_used', 'admin_user', ?, 'Signed in with the break-glass reset passcode', ?)
+      `).bind(admin.id, admin.id, new Date().toISOString()).run();
+    }
   }
 
   if (!valid || !admin) {

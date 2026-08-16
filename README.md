@@ -23,8 +23,8 @@ The repository supports two runtimes:
    - `CHOIR_TOKEN_SECRET`
    - `CRON_SECRET`
 
-5. Add `CHOIR_ADMIN_PASSCODE=0331` as the initial administrator code. On first successful sign-in an administrator record is created; change the code and add the recovery email in Settings.
-6. Optional but recommended: connect Resend and set `RESEND_API_KEY` plus a verified `CHOIR_FROM_EMAIL` address. Parent agreement, schedule, registration-return and recovery messages are still recorded in the outbox when email is not connected.
+5. Add `CHOIR_ADMIN_PASSCODE=0331` as the initial administrator code. On first successful sign-in an administrator record is created; change the code in Settings and keep it somewhere safe. If it is ever forgotten, set `CHOIR_ADMIN_RESET_PASSCODE` in Vercel, sign in with it, choose a new passcode, then delete that variable.
+6. Optional but recommended: connect Resend and set `RESEND_API_KEY` plus a verified `CHOIR_FROM_EMAIL` address. Parent agreement, schedule and registration-return messages are still recorded in the outbox when email is not connected.
 7. Deploy. When `DATABASE_URL` is available, the Vercel build applies every checked-in PostgreSQL migration before compiling the application.
 
 The hidden administrator entry is the top-right corner of the public header. It opens a passcode-only dialog. The administrator dashboard itself is protected by rate-limited, expiring server sessions.
@@ -67,7 +67,7 @@ VERCEL=1 npm run build
 - Per-year recurring or manual schedules, finalization, live parent updates and printable schedule PDFs.
 - Excel export, merged signed agreements, class lists, blank agreements, A4/A5 lyrics sheets and replaceable document logo.
 - Flyer/detail-sheet/custom image-generator prompt studio with style refresh and attachment checklist.
-- Daily encrypted backups, JSON export, protected restore, administrator recovery and activity logs.
+- Daily encrypted backups, JSON export, protected restore and activity logs.
 
 ## Useful commands
 

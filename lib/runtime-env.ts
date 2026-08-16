@@ -7,6 +7,10 @@ export type ChoirRuntimeEnv = {
   CHOIR_DATA_KEY: string;
   CHOIR_TOKEN_SECRET: string;
   CHOIR_ADMIN_PASSCODE: string;
+  // Break-glass sign-in for a forgotten passcode. Unset by default, so there is
+  // no standing second passcode; the owner sets it in the hosting dashboard,
+  // signs in, chooses a new passcode in Settings, then removes it again.
+  CHOIR_ADMIN_RESET_PASSCODE?: string;
   RESEND_API_KEY?: string;
   CHOIR_FROM_EMAIL?: string;
 };

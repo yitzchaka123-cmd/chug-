@@ -328,7 +328,6 @@ export default function Home() {
               <input autoFocus id="admin-code" type="password" inputMode="numeric" maxLength={128} value={passcode} onChange={(event) => { setPasscode(event.target.value); setPasscodeError(""); }} aria-invalid={Boolean(passcodeError)} aria-describedby={passcodeError ? "admin-code-error" : undefined} />
               {passcodeError && <p className="field-error" id="admin-code-error">{passcodeError}</p>}
               <button className="button button-full" type="submit" disabled={adminBusy}>{adminBusy ? "Checking…" : "Continue"}</button>
-              <Link className="admin-recovery-link" href="/admin/recover">Forgot or reset the passcode</Link>
             </form>
           </section>
         </div>
