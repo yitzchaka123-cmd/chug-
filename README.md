@@ -27,7 +27,7 @@ The repository supports two runtimes:
 6. Optional but recommended: connect Resend and set `RESEND_API_KEY` plus a verified `CHOIR_FROM_EMAIL` address. Parent agreement, schedule and registration-return messages are still recorded in the outbox when email is not connected.
 7. Deploy. When `DATABASE_URL` is available, the Vercel build applies every checked-in PostgreSQL migration before compiling the application.
 
-The hidden administrator entry is the top-right corner of the public header. It opens a passcode-only dialog. The administrator dashboard itself is protected by rate-limited, expiring server sessions.
+The hidden administrator entry sits in the footer, directly under the Accessibility link. It opens a passcode-only dialog. The administrator dashboard itself is protected by rate-limited, expiring server sessions.
 
 ## Local Vercel-style development
 

@@ -204,7 +204,6 @@ export default function Home() {
           <Link href="#contact">Contact</Link>
           <Link className="nav-register" href="/register">Register now</Link>
         </nav>
-        <button className="admin-hotspot" aria-label="Open administrator access" onClick={() => setAdminOpen(true)} />
       </header>
 
       <section className="hero-scene" id="top">
@@ -308,6 +307,7 @@ export default function Home() {
           <Link href="/terms">Terms of use</Link>
           <Link href="/privacy">Privacy policy</Link>
           <Link href="/accessibility">Accessibility</Link>
+          <button className="admin-hotspot" aria-label="Open administrator access" onClick={() => setAdminOpen(true)} />
         </nav>
         <div className="footer-contact"><a href="tel:+972535906149">{choirConfig.brand.phone}</a><small>© 2026 The Choir Chug. All rights reserved.</small></div>
       </footer>
