@@ -82,11 +82,19 @@ test("registration, custom pricing, schedules, PDFs, admin data and backups work
     const cashMethod = standard.paymentMethodRecords.find((method) => method.code === "cash");
     assert.equal(cashMethod?.cashHandling, true, "the seeded cash method must carry the cash-handling flag");
 
+    const guestAdminPage = await request("/admin");
+    assert.equal(guestAdminPage.status, 404, "the administrator address must give nothing away without a session");
+    const guestAdminHtml = await guestAdminPage.text();
+    assert.equal(/Administrator navigation|admin-sidebar|Creative studio/.test(guestAdminHtml), false, "the administrator screen must not be sent to a signed-out visitor at all");
+
     const login = await request("/api/admin/session", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ passcode: "0331" }) });
     assert.equal(login.status, 200);
     const cookie = login.headers.get("set-cookie")?.split(";")[0];
     assert.ok(cookie?.startsWith("choir_admin_session="));
     const adminHeaders = { Cookie: cookie, "Content-Type": "application/json" };
+    const signedInAdminPage = await request("/admin", { headers: { Cookie: cookie } });
+    assert.equal(signedInAdminPage.status, 200, "a signed-in administrator must still reach the system");
+    assert.match(await signedInAdminPage.text(), /Administrator navigation/, "the signed-in administrator gets the real screen");
     const years = await json(await request("/api/admin/years", { headers: adminHeaders }));
     const yearId = years.years.find((year) => year.status === "active").id;
 

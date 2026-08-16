@@ -215,6 +215,27 @@ export async function requireAdminSession(request: Request, runtime: ChoirRuntim
   return { id: session.admin_user_id, displayName: session.display_name, email: session.email };
 }
 
+/**
+ * Read-only session check for server-rendered pages. It never writes, so it is safe to call
+ * during render; the administrator screen's own API calls keep the session alive.
+ */
+export async function hasActiveAdminSession(cookieHeader: string | null, runtime: ChoirRuntimeEnv): Promise<boolean> {
+  const token = cookieValue(new Request("https://local/", { headers: cookieHeader ? { cookie: cookieHeader } : undefined }), COOKIE_NAME);
+  if (!token) return false;
+  const tokenHash = await hashOpaqueToken(token, runtime.CHOIR_TOKEN_SECRET);
+  const session = await runtime.DB.prepare(`
+    SELECT s.id, s.admin_user_id, s.last_seen_at, s.expires_at, u.display_name, u.email
+    FROM admin_sessions s
+    JOIN admin_users u ON u.id = s.admin_user_id
+    WHERE s.token_hash = ? AND s.revoked_at IS NULL AND u.status = 'active'
+    LIMIT 1
+  `).bind(tokenHash).first<SessionRow>();
+  if (!session) return false;
+  const now = Date.now();
+  if (now - new Date(session.last_seen_at).getTime() > INACTIVITY_MS) return false;
+  return new Date(session.expires_at).getTime() > now;
+}
+
 export async function revokeAdminSession(request: Request, runtime: ChoirRuntimeEnv) {
   const token = cookieValue(request, COOKIE_NAME);
   if (!token) return;

@@ -48,17 +48,37 @@ export default function ParentSchedule({ params }: { params: Promise<{ token: st
       .catch((reason) => setError(reason instanceof Error ? reason.message : "Schedule could not be loaded."));
   }, [token, month]);
 
+  const hebrewShort = useMemo(() => new Intl.DateTimeFormat("he-u-ca-hebrew", { day: "numeric", month: "short", timeZone: "Asia/Jerusalem" }), []);
+  const hebrewParts = useMemo(() => new Intl.DateTimeFormat("en-u-ca-hebrew", { day: "numeric", month: "long", timeZone: "Asia/Jerusalem" }), []);
+  const today = useMemo(() => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem" }).format(new Date()), []);
+
   const cells = useMemo(() => {
     const first = new Date(`${month}-01T12:00:00Z`);
     const count = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0)).getUTCDate();
-    const result: Array<{ date: string; day: number; event?: ScheduleData["events"][number] }> = [];
-    for (let i = 0; i < first.getUTCDay(); i += 1) result.push({ date: "", day: 0 });
+    const result: Array<{ key: string; date: string; day: number; weekday: number; hebrew: string; holidays: Array<{ en: string; he: string }>; shabbat: string; event?: ScheduleData["events"][number] }> = [];
+    for (let i = 0; i < first.getUTCDay(); i += 1) result.push({ key: `blank-${i}`, date: "", day: 0, weekday: i, hebrew: "", holidays: [], shabbat: "" });
     for (let day = 1; day <= count; day += 1) {
       const date = `${month}-${String(day).padStart(2, "0")}`;
-      result.push({ date, day, event: data?.events.find((event) => event.date === date) });
+      const moment = new Date(`${date}T12:00:00+03:00`);
+      const weekday = new Date(`${date}T12:00:00Z`).getUTCDay();
+      const parts = hebrewParts.formatToParts(moment);
+      const { jewish, israeli } = holidaysForHebrewDate(Number(parts.find((part) => part.type === "day")?.value || 0), parts.find((part) => part.type === "month")?.value || "");
+      let shabbat = "";
+      if (weekday === 5) { const candles = candleLightingTime(date); if (candles) shabbat = `🕯 ${candles}`; }
+      if (weekday === 6) { const ends = shabbatEndTime(date); shabbat = ends ? `Shabbat ends ${ends}` : "Shabbat"; }
+      result.push({
+        key: date,
+        date,
+        day,
+        weekday,
+        hebrew: hebrewShort.format(moment),
+        holidays: [jewish, israeli].filter(Boolean) as Array<{ en: string; he: string }>,
+        shabbat,
+        event: data?.events.find((event) => event.date === date),
+      });
     }
     return result;
-  }, [month, data]);
+  }, [month, data, hebrewShort, hebrewParts]);
   const monthLabel = new Intl.DateTimeFormat("en-GB", { month: "long", year: "numeric" }).format(new Date(`${month}-01T12:00:00Z`));
 
   const currentUpdate = data?.announcement && data.announcement.body ? data.announcement : null;
@@ -171,19 +191,48 @@ export default function ParentSchedule({ params }: { params: Promise<{ token: st
       {error ? <section className="schedule-error"><h1>Schedule unavailable</h1><p>{error}</p><a href={`tel:+972535906149`}>Call {choirConfig.brand.phone}</a></section> : !data ? <section className="schedule-loading">Loading schedule…</section> : (
         <>
           <section className="schedule-hero"><p className="eyebrow">{data.year.name}</p><h1>{data.group?.name || "Group schedule"}</h1>{data.group ? <p>{[data.group.startTime && data.group.endTime ? `${data.group.startTime}–${data.group.endTime}` : "", data.group.location || ""].filter(Boolean).join(" · ")}</p> : <p>Your group schedule is being prepared. This same private link will update automatically after group placement.</p>}</section>
-          <section className="schedule-updates">
-            <div className="schedule-updates-head"><strong>Live updates</strong>{pastUpdates.length > 0 && <button type="button" onClick={() => setShowHistory((current) => !current)}>{showHistory ? "Hide history" : "View history"}</button>}</div>
-            {currentUpdate ? <article className="schedule-update-current"><h3>{currentUpdate.title || "Update"}</h3><p>{currentUpdate.body}</p>{currentUpdate.updatedAt && <small>{new Date(currentUpdate.updatedAt).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}</small>}</article> : <p className="schedule-update-empty">No current live updates. New updates will appear here first.</p>}
-            {showHistory && <div className="schedule-update-history">{pastUpdates.map((update) => <article key={update.id}><h4>{update.title || "Update"}</h4><p>{update.body}</p><small>{new Date(update.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}</small></article>)}{pastUpdates.length === 0 && <p className="schedule-update-empty">No earlier updates.</p>}</div>}
-          </section>
-          {data.next && <section className="schedule-announcement"><strong>Next session</strong><p>{new Date(`${data.next.starts_at.slice(0, 10)}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })} · {data.next.starts_at.slice(11, 16)}{data.next.ends_at ? `–${data.next.ends_at.slice(11, 16)}` : ""}{data.next.location ? ` · ${data.next.location}` : ""}</p></section>}
-          {data.group && <section className="parent-calendar">
-            <div className="calendar-toolbar"><button onClick={() => setMonth(addMonth(month, -1))} aria-label="Previous month">←</button><h2>{monthLabel}</h2><button onClick={() => setMonth(addMonth(month, 1))} aria-label="Next month">→</button></div>
-            <div className="calendar-print-row"><label><span>Paper</span><select value={printSize} onChange={(event) => setPrintSize(event.target.value === "A5" ? "A5" : "A4")}><option value="A4">A4</option><option value="A5">A5</option></select></label><button type="button" disabled={printing} onClick={() => void printYearCalendar()}>{printing ? "Preparing…" : "Print yearly calendar"}</button></div>
-            <div className="calendar-weekdays">{["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => <span key={day}>{day}</span>)}</div>
-            <div className="calendar-grid">{cells.map((cell, index) => <article key={`${cell.date}-${index}`} className={!cell.date ? "calendar-cell empty" : cell.event ? "calendar-cell has-event" : "calendar-cell"}>{cell.date && <><strong>{cell.day}</strong>{cell.event && <div><b>{cell.event.status === "cancelled" ? "Cancelled" : cell.event.title_en}</b><small>{cell.event.labels.hebrewEn}</small>{cell.event.holiday && <small>{cell.event.holiday.en} · <span lang="he" dir="rtl">{cell.event.holiday.he}</span></small>}{cell.event.note && <p>{cell.event.note}</p>}</div>}</>}</article>)}</div>
-            <div className="schedule-list"><h2>Month details</h2>{data.events.length ? data.events.map((event) => <article key={event.id}><time>{new Date(`${event.date}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}</time><h3>{event.title_en}{event.title_he && <span lang="he" dir="rtl"> · {event.title_he}</span>}</h3><p>{event.labels.hebrewEn} · <span lang="he" dir="rtl">{event.labels.hebrewHe}</span></p>{event.holiday && <p>{event.holiday.en} · <span lang="he" dir="rtl">{event.holiday.he}</span></p>}<p>{event.starts_at.slice(11, 16)}{event.ends_at ? `–${event.ends_at.slice(11, 16)}` : ""}{event.location ? ` · ${event.location}` : ""}</p>{event.note && <blockquote>{event.note}</blockquote>}</article>) : <p>No sessions or updates are listed for this month.</p>}</div>
-          </section>}
+          <div className="schedule-body">
+            <div className="schedule-main">
+              {data.group ? <section className="parent-calendar">
+                <div className="calendar-toolbar"><button onClick={() => setMonth(addMonth(month, -1))} aria-label="Previous month">←</button><h2>{monthLabel}</h2><button onClick={() => setMonth(addMonth(month, 1))} aria-label="Next month">→</button></div>
+                <div className="calendar-weekdays">{["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => <span key={day}><b>{day.charAt(0)}</b><i>{day}</i></span>)}</div>
+                <div className="calendar-grid">{cells.map((cell) => {
+                  if (!cell.date) return <article key={cell.key} className="calendar-cell empty" />;
+                  const cancelled = cell.event?.status === "cancelled";
+                  const classes = ["calendar-cell"];
+                  if (cell.event) classes.push(cancelled ? "is-cancelled" : "has-event");
+                  if (cell.weekday === 6) classes.push("is-shabbat");
+                  if (cell.date === today) classes.push("is-today");
+                  return <article key={cell.key} className={classes.join(" ")}>
+                    <header><strong>{cell.day}</strong><span lang="he" dir="rtl">{cell.hebrew}</span></header>
+                    <div className="calendar-cell-body">
+                      {cell.event && (cancelled ? <p className="cell-session cancelled">No choir</p> : <p className="cell-session"><b>{cell.event.starts_at.slice(11, 16)}</b>{cell.event.ends_at && <i>until {cell.event.ends_at.slice(11, 16)}</i>}<span>{cell.event.title_en}</span></p>)}
+                      {cell.holidays.map((holiday) => <p key={holiday.en} className="cell-holiday">{holiday.en}</p>)}
+                      {cell.shabbat && <p className="cell-shabbat">{cell.shabbat}</p>}
+                      {cell.event?.note && <p className="cell-note">{cell.event.note}</p>}
+                    </div>
+                  </article>;
+                })}</div>
+                <p className="calendar-legend"><span className="legend-dot" /> Choir session · candle lighting and Shabbat end times are for Beit Shemesh.</p>
+              </section> : <section className="parent-calendar calendar-pending"><h2>Calendar coming soon</h2><p>Your daughter&rsquo;s group has not been set yet. The calendar appears here as soon as she is placed - this same link keeps working.</p></section>}
+            </div>
+            <aside className="schedule-side">
+              <section className="schedule-updates">
+                <div className="schedule-updates-head"><strong>Live updates</strong>{pastUpdates.length > 0 && <button type="button" onClick={() => setShowHistory((current) => !current)}>{showHistory ? "Hide history" : "View history"}</button>}</div>
+                {currentUpdate ? <article className="schedule-update-current"><h3>{currentUpdate.title || "Update"}</h3><p>{currentUpdate.body}</p>{currentUpdate.updatedAt && <small>{new Date(currentUpdate.updatedAt).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}</small>}</article> : <p className="schedule-update-empty">No current live updates. New updates will appear here first.</p>}
+                {showHistory && <div className="schedule-update-history">{pastUpdates.map((update) => <article key={update.id}><h4>{update.title || "Update"}</h4><p>{update.body}</p><small>{new Date(update.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}</small></article>)}{pastUpdates.length === 0 && <p className="schedule-update-empty">No earlier updates.</p>}</div>}
+              </section>
+              {data.next && <section className="schedule-announcement"><strong>Next session</strong><p>{new Date(`${data.next.starts_at.slice(0, 10)}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}</p><b>{data.next.starts_at.slice(11, 16)}{data.next.ends_at ? `–${data.next.ends_at.slice(11, 16)}` : ""}</b>{data.next.location && <small>{data.next.location}</small>}</section>}
+              {data.group && <section className="schedule-list">
+                <h2>{monthLabel} sessions</h2>
+                {data.events.length ? <ol>{data.events.map((event) => <li key={event.id} className={event.status === "cancelled" ? "cancelled" : ""}>
+                  <span className="list-date"><b>{new Date(`${event.date}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric" })}</b><i>{new Date(`${event.date}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "short" })}</i></span>
+                  <span className="list-body"><strong>{event.status === "cancelled" ? "No choir" : `${event.starts_at.slice(11, 16)}${event.ends_at ? `–${event.ends_at.slice(11, 16)}` : ""}`}</strong><small>{event.labels.hebrewEn}{event.location ? ` · ${event.location}` : ""}</small>{event.holiday && <small className="list-holiday">{event.holiday.en} · <span lang="he" dir="rtl">{event.holiday.he}</span></small>}{event.note && <em>{event.note}</em>}</span>
+                </li>)}</ol> : <p className="schedule-update-empty">No sessions are listed for this month.</p>}
+              </section>}
+              {data.group && <section className="calendar-print-row"><label><span>Paper</span><select value={printSize} onChange={(event) => setPrintSize(event.target.value === "A5" ? "A5" : "A4")}><option value="A4">A4</option><option value="A5">A5</option></select></label><button type="button" disabled={printing} onClick={() => void printYearCalendar()}>{printing ? "Preparing…" : "Print yearly calendar"}</button></section>}
+            </aside>
+          </div>
         </>
       )}
       <footer className="parent-schedule-footer"><span>Schedule changes appear here live.</span><a href={`tel:+972535906149`}>{choirConfig.brand.phone}</a></footer>
