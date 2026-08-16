@@ -13,7 +13,15 @@ export async function loadChoirDocumentAssets(request: Request, runtime: ChoirRu
       if (!response.ok) throw new Error(`Document asset ${path} could not be loaded.`);
       return new Uint8Array(await response.arrayBuffer());
     }
-    const [{ readFile }, { join }] = await Promise.all([import("node:fs/promises"), import("node:path")]);
-    return new Uint8Array(await readFile(join(process.cwd(), "public", path.replace(/^\/+/, ""))));
+    try {
+      const [{ readFile }, { join }] = await Promise.all([import("node:fs/promises"), import("node:path")]);
+      return new Uint8Array(await readFile(join(process.cwd(), "public", path.replace(/^\/+/, ""))));
+    } catch {
+      // Serverless bundles may not include public/; the deployment always
+      // serves its own static assets, so fall back to fetching them.
+      const response = await fetch(new URL(path, request.url));
+      if (!response.ok) throw new Error(`Document asset ${path} could not be loaded.`);
+      return new Uint8Array(await response.arrayBuffer());
+    }
   });
 }

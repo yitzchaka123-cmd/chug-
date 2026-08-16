@@ -62,7 +62,7 @@ export async function GET(request: Request) {
     const settings = await ensureCurrentRegistrationConfig(runtime.DB, url.searchParams.get("yearId"));
     const query = url.searchParams.get("q")?.trim().slice(0, 100) || "";
     const periodKey = new Intl.DateTimeFormat("en-CA", { year: "numeric", month: "2-digit", timeZone: "Asia/Jerusalem" }).format(new Date()).slice(0, 7);
-    const pattern = `%${query.replace(/[\\%_]/g, "\\$&")}%`;
+    const pattern = `%${query.toLowerCase().replace(/[!%_]/g, "!$&")}%`;
     const result = await runtime.DB.prepare(`
       SELECT
         r.id, r.participant_full_name, r.participant_birth_date,
@@ -76,11 +76,11 @@ export async function GET(request: Request) {
       LEFT JOIN students s ON s.created_from_registration_id = r.id
       LEFT JOIN signed_agreements sa ON sa.registration_id = r.id
       WHERE r.school_year_id = ? AND (
-        ? = '' OR r.participant_full_name LIKE ? ESCAPE '\\' OR
-        COALESCE(r.father_name, '') LIKE ? ESCAPE '\\' OR
-        COALESCE(r.mother_name, '') LIKE ? ESCAPE '\\' OR
-        COALESCE(r.father_phone, '') LIKE ? ESCAPE '\\' OR
-        COALESCE(r.mother_phone, '') LIKE ? ESCAPE '\\'
+        ? = '' OR LOWER(r.participant_full_name) LIKE ? ESCAPE '!' OR
+        LOWER(COALESCE(r.father_name, '')) LIKE ? ESCAPE '!' OR
+        LOWER(COALESCE(r.mother_name, '')) LIKE ? ESCAPE '!' OR
+        LOWER(COALESCE(r.father_phone, '')) LIKE ? ESCAPE '!' OR
+        LOWER(COALESCE(r.mother_phone, '')) LIKE ? ESCAPE '!'
       )
       ORDER BY COALESCE(r.submitted_at, r.created_at) DESC
       LIMIT 250

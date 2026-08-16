@@ -90,3 +90,27 @@ test("sensitive JSON uses authenticated encryption and private tokens use keyed 
   assert.equal(await hashOpaqueToken("same-token", secret), await hashOpaqueToken("same-token", secret));
   assert.notEqual(await hashOpaqueToken("same-token", secret), await hashOpaqueToken("different-token", secret));
 });
+
+test("PostgreSQL placeholder translation survives quoted literals", async () => {
+  const { postgresQuery, translatePlaceholders } = await import("@/lib/vercel-runtime");
+  assert.equal(translatePlaceholders("SELECT * FROM t WHERE a = ? AND b = ?"), "SELECT * FROM t WHERE a = $1 AND b = $2");
+  assert.equal(
+    translatePlaceholders("SELECT * FROM t WHERE a LIKE ? ESCAPE '!' OR b LIKE ? ESCAPE '!'"),
+    "SELECT * FROM t WHERE a LIKE $1 ESCAPE '!' OR b LIKE $2 ESCAPE '!'",
+  );
+  // A backslash inside a string is a literal character, not a quote escape —
+  // placeholders after it must still be numbered.
+  assert.equal(
+    translatePlaceholders("SELECT * FROM t WHERE a LIKE ? ESCAPE '\\' OR b LIKE ? ESCAPE '\\'"),
+    "SELECT * FROM t WHERE a LIKE $1 ESCAPE '\\' OR b LIKE $2 ESCAPE '\\'",
+  );
+  // Doubled quotes stay inside the literal; the ? inside is never rewritten.
+  assert.equal(
+    translatePlaceholders("SELECT 'it''s a ? mark', ? FROM t"),
+    "SELECT 'it''s a ? mark', $1 FROM t",
+  );
+  assert.equal(
+    postgresQuery("INSERT OR IGNORE INTO t (a) VALUES (?);"),
+    "INSERT INTO t (a) VALUES ($1) ON CONFLICT DO NOTHING",
+  );
+});

@@ -7,18 +7,32 @@ type NeonClient = {
 
 let neonClientPromise: Promise<NeonClient> | null = null;
 
-function translatePlaceholders(query: string) {
+// Standard SQL (SQLite and PostgreSQL alike) escapes a quote inside a quoted
+// region by doubling it; backslash has no special meaning. Track quoted
+// regions accordingly so placeholders inside literals are never rewritten and
+// literals containing backslashes never desync the scan.
+export function translatePlaceholders(query: string) {
   let output = "";
   let index = 0;
-  let singleQuoted = false;
-  let doubleQuoted = false;
 
   for (let cursor = 0; cursor < query.length; cursor += 1) {
     const character = query[cursor];
-    const previous = query[cursor - 1];
-    if (character === "'" && previous !== "\\" && !doubleQuoted) singleQuoted = !singleQuoted;
-    if (character === '"' && previous !== "\\" && !singleQuoted) doubleQuoted = !doubleQuoted;
-    if (character === "?" && !singleQuoted && !doubleQuoted) {
+    if (character === "'" || character === '"') {
+      const quote = character;
+      output += character;
+      cursor += 1;
+      while (cursor < query.length) {
+        const inner = query[cursor];
+        output += inner;
+        if (inner === quote) {
+          if (query[cursor + 1] === quote) { output += quote; cursor += 2; continue; }
+          break;
+        }
+        cursor += 1;
+      }
+      continue;
+    }
+    if (character === "?") {
       index += 1;
       output += `$${index}`;
     } else {
@@ -28,7 +42,7 @@ function translatePlaceholders(query: string) {
   return output;
 }
 
-function postgresQuery(query: string) {
+export function postgresQuery(query: string) {
   const trimmed = query.trim().replace(/;\s*$/, "");
   const ignoreConflicts = /^INSERT\s+OR\s+IGNORE\s+INTO\b/i.test(trimmed);
   const normalized = ignoreConflicts
