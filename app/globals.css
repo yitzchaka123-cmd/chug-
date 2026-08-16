@@ -1429,3 +1429,82 @@ h2 { font-size: clamp(2.5rem, 4.8vw, 4.5rem); line-height: 0.98; }
 .missing-step-notice p { margin: 4px 0 0; color: #6b5158; font-size: .86rem; }
 .missing-step-notice button { flex: 0 0 auto; border: 0; border-radius: 999px; background: var(--wine); color: #fff; padding: 11px 20px; font-size: .82rem; font-weight: 730; cursor: pointer; }
 .missing-step-notice button:hover { background: var(--wine-dark); }
+
+/* ---------------------------------------------------------------------------
+   Administrator panel: readable overlay and typography
+   The student drawer is an overlay at every width. The admin grid only defines
+   two columns, so a docked third column silently fell to a second row and the
+   drawer opened out of sight.
+   --------------------------------------------------------------------------- */
+.student-drawer {
+  position: fixed;
+  z-index: 140;
+  top: 0;
+  right: 0;
+  width: min(100%, 440px);
+  height: 100dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-left: 1px solid #e5dddf;
+  background: #fff;
+  box-shadow: -28px 0 80px rgba(48, 29, 36, .22);
+}
+
+/* Comfortable reading sizes. The panel was built at 8-11px in places. */
+.admin-shell { color: #2f2429; }
+.admin-shell h1 { font-size: 1.6rem; }
+.admin-card h2, .admin-card-head h2, .students-header h2 { font-family: Georgia, "Times New Roman", serif; font-size: 1.3rem; font-weight: 500; letter-spacing: 0; }
+.admin-shell .eyebrow { font-size: .72rem; letter-spacing: .12em; }
+.admin-header p { font-size: .92rem; }
+.admin-header select, .admin-primary, .secondary-button, .danger-button { font-size: .88rem; }
+.admin-title-line > span { font-size: .68rem; }
+.admin-sidebar nav button { font-size: .92rem; }
+.sidebar-bottom strong { font-size: .88rem; }
+.sidebar-bottom small, .sidebar-logout { font-size: .78rem; }
+.metric-grid article > span { font-size: .84rem; }
+.metric-grid article > small { font-size: .74rem; }
+.metric-grid article > strong { font-size: 2rem; }
+.students-header p, .admin-muted { font-size: .84rem; }
+.admin-search input { font-size: .9rem; }
+.filter-button, .student-tools .secondary-button { font-size: .82rem; }
+.admin-empty-state p { font-size: .88rem; }
+.student-avatar { font-size: .82rem; }
+.student-name strong { font-size: .98rem; }
+.student-name span { font-size: .8rem; }
+.status-chip { font-size: .7rem; }
+.drawer-head { font-size: .84rem; }
+.drawer-student h2 { font-size: 1.25rem; }
+.drawer-student p { font-size: .84rem; }
+.drawer-actions button, .drawer-actions a { min-height: 44px; font-size: .8rem; }
+.drawer-section-title h3 { font-family: Georgia, "Times New Roman", serif; font-size: 1.05rem; font-weight: 500; }
+.drawer-section-title button { font-size: .8rem; }
+.mini-details dt { font-size: .8rem; }
+.mini-details dd { font-size: .86rem; }
+.payment-ledger button { font-size: .8rem; }
+.proof-preview button, .proof-preview a { font-size: .8rem; }
+.proof-preview strong { font-size: .88rem; }
+.proof-preview small { font-size: .76rem; }
+.private-note, .admin-textarea { font-size: .88rem; }
+.activity-list li { font-size: .82rem; }
+.activity-list small { font-size: .72rem; }
+.setting-row p { font-size: .84rem; }
+.compact-form-grid label, .settings-form label, .field-grid label { font-size: .84rem; }
+.compact-form-grid input, .compact-form-grid select, .compact-form-grid textarea,
+.settings-form input, .settings-form select, .settings-form textarea { font-size: .92rem; }
+.compact-form-grid label small, .settings-form label small { font-size: .76rem; }
+.history-table strong { font-size: .92rem; }
+.history-table small, .history-table time { font-size: .78rem; }
+.method-list strong, .custom-link-list strong { font-size: .95rem; }
+.method-list p, .custom-link-list span, .custom-link-list small { font-size: .82rem; }
+.card-details dt { font-size: .78rem; }
+.card-details dd { font-size: .92rem; }
+.schedule-event-list strong { font-size: .92rem; }
+.schedule-event-list span, .schedule-event-list time { font-size: .8rem; }
+.email-status-list span, .backup-list span, .backup-list time { font-size: .84rem; }
+
+@media (max-width: 760px) {
+  .student-drawer { width: 100%; padding-bottom: 92px; }
+  .admin-system .admin-sidebar nav button, .admin-system .admin-sidebar nav button:nth-child(6) { font-size: .6rem; }
+  .admin-shell h1 { font-size: 1.4rem; }
+  .admin-card h2, .admin-card-head h2, .students-header h2 { font-size: 1.15rem; }
+}
