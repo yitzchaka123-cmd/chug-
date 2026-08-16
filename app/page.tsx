@@ -16,8 +16,12 @@ export default function Home() {
     const headline = heroScene?.querySelector<HTMLElement>(".hero-headline");
     const headlineParts = Array.from(heroScene?.querySelectorAll<HTMLElement>(".hero-headline > span") ?? []);
     const heroActions = heroScene?.querySelector<HTMLElement>(".hero-actions");
+    const heroCopy = heroScene?.querySelector<HTMLElement>(".hero-copy");
     const motionPreference = window.matchMedia("(prefers-reduced-motion: reduce)");
     let frame = 0;
+    // Measured at rest so the stacked photo can sit below the copy instead of
+    // under it. Re-measured whenever the hero is back at its starting state.
+    let restingCopyHeight = 0;
 
     const update = () => {
       frame = 0;
@@ -40,17 +44,17 @@ export default function Home() {
       if (motionPreference.matches) {
         headlineParts.forEach((part) => { part.style.transform = "none"; });
       } else {
-        const copyMorph = smoothstep(0.015, 0.2, progress);
-        const copyExit = smoothstep(0.27, 0.4, progress);
-        const photoExpand = smoothstep(0.15, 0.4, progress);
-        const photoDrift = smoothstep(0.39, 0.98, progress);
-        const panelTravel = smoothstep(0.36, 0.88, progress);
-        const panelFadeIn = smoothstep(0.34, 0.43, progress);
-        const panelFadeOut = smoothstep(0.82, 0.94, progress);
+        const copyMorph = smoothstep(0.02, 0.22, progress);
+        const copyExit = smoothstep(0.3, 0.46, progress);
+        const photoExpand = smoothstep(0.18, 0.46, progress);
+        const photoDrift = smoothstep(0.46, 1, progress);
+        const panelTravel = smoothstep(0.44, 0.95, progress);
+        const panelFadeIn = smoothstep(0.42, 0.52, progress);
+        const panelFadeOut = smoothstep(0.9, 1, progress);
         const pageInset = stackedHero ? 15 : Math.max(viewportWidth * 0.03, (viewportWidth - 1420) / 2);
 
         const startCopyLeft = pageInset;
-        const startCopyTop = stackedHero ? 88 : Math.max(118, viewportHeight * 0.22);
+        const startCopyTop = stackedHero ? 80 : Math.max(118, viewportHeight * 0.22);
         const startCopyWidth = stackedHero ? viewportWidth - pageInset * 2 : Math.max(350, viewportWidth * (viewportWidth <= 1000 ? 0.39 : 0.37));
         const finalCopyLeft = pageInset;
         const finalCopyTop = stackedHero ? 78 : Math.max(92, viewportHeight * 0.1);
@@ -63,7 +67,7 @@ export default function Home() {
         setHeroNumber("--hero-copy-opacity", 1 - copyExit);
 
         const initialHeadlineSize = stackedHero
-          ? Math.min(75, Math.max(52, viewportWidth * 0.155))
+          ? Math.min(64, Math.max(44, viewportWidth * 0.132))
           : Math.min(110, Math.max(69, viewportWidth * 0.062));
         const finalHeadlineSize = stackedHero
           ? Math.max(20, viewportWidth * 0.058)
@@ -83,18 +87,24 @@ export default function Home() {
         const compactMobile = viewportWidth <= 350;
         const actionWidth = heroActions?.offsetWidth ?? (stackedHero ? 285 : 390);
         setHeroPixels("--hero-proof-x", stackedHero ? 0 : copyMorph * (actionWidth + 34));
-        setHeroPixels("--hero-proof-y", stackedHero ? (compactMobile ? 112 : 62) : (1 - copyMorph) * 76);
-        setHeroPixels("--hero-meta-height", stackedHero ? (compactMobile ? 158 : 112) : mix(122, 55, copyMorph));
+        setHeroPixels("--hero-proof-y", stackedHero ? (compactMobile ? 104 : 58) : (1 - copyMorph) * 76);
+        setHeroPixels("--hero-meta-height", stackedHero ? (compactMobile ? 148 : 104) : mix(122, 55, copyMorph));
+
+        // The stacked layout positions the photo from the copy's real height, so
+        // the headline, buttons and proof line can never sit on top of the photo.
+        if (stackedHero && heroCopy && progress < 0.04) restingCopyHeight = heroCopy.offsetHeight;
+        const stackedPhotoTop = startCopyTop + (restingCopyHeight || 400) + 18;
+        const stackedPhotoRoom = viewportHeight - stackedPhotoTop - 16;
 
         const startPhotoLeft = stackedHero
           ? 15
           : Math.max(viewportWidth * (viewportWidth <= 1000 ? 0.45 : 0.43), startCopyLeft + startCopyWidth + 28);
         const startPhotoWidth = stackedHero ? viewportWidth - 30 : viewportWidth - startPhotoLeft - pageInset;
         const startPhotoHeight = stackedHero
-          ? Math.min(385, Math.max(285, viewportHeight * 0.36))
+          ? Math.min(385, Math.max(190, stackedPhotoRoom))
           : Math.min(startPhotoWidth * 0.75, viewportHeight * 0.76);
         const startPhotoTop = stackedHero
-          ? Math.max(330, viewportHeight - startPhotoHeight - 28)
+          ? stackedPhotoTop
           : (viewportHeight - startPhotoHeight) / 2 + 24;
         const finalPhotoInsetX = stackedHero ? 8 : Math.max(viewportWidth * 0.025, (viewportWidth - 1500) / 2);
         const finalPhotoTop = stackedHero ? 10 : viewportHeight * 0.03;
@@ -102,7 +112,7 @@ export default function Home() {
         const finalPhotoHeight = viewportHeight - finalPhotoTop * 2;
 
         setHeroPixels("--hero-photo-left", mix(startPhotoLeft, finalPhotoInsetX, photoExpand));
-        setHeroPixels("--hero-photo-top", mix(startPhotoTop, finalPhotoTop, photoExpand) + photoDrift * (stackedHero ? 125 : 175));
+        setHeroPixels("--hero-photo-top", mix(startPhotoTop, finalPhotoTop, photoExpand) + photoDrift * (stackedHero ? 105 : 175));
         setHeroPixels("--hero-photo-width", mix(startPhotoWidth, finalPhotoWidth, photoExpand));
         setHeroPixels("--hero-photo-height", mix(startPhotoHeight, finalPhotoHeight, photoExpand));
         setHeroPixels("--hero-photo-radius", mix(stackedHero ? 28 : 48, stackedHero ? 24 : 40, photoExpand));
