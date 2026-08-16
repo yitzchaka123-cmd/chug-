@@ -169,10 +169,11 @@ export async function POST(request: Request) {
     const signature = decodeAndValidateSignatureDataUrl(signatureData);
     const proofEntry = formData.get("proof");
     const proofFile = proofEntry instanceof File && proofEntry.size > 0 ? proofEntry : null;
-    if (form.method === "Cash" && proofFile) return jsonError("Cash registrations do not need a payment screenshot.");
+    const isCashMethod = methodRecord?.cashHandling === true;
+    if (isCashMethod && proofFile) return jsonError("Cash registrations do not need a payment screenshot.");
     const proofPolicy = offer?.proofPolicy || methodRecord?.proofPolicy || (settings.proofUploadRequired ? "required" : "optional");
     if (proofPolicy === "none" && proofFile) return jsonError("This payment method does not accept a payment screenshot.");
-    if (proofPolicy === "required" && form.method !== "Cash" && !proofFile) return jsonError("A payment screenshot is required for this payment method.");
+    if (proofPolicy === "required" && !isCashMethod && !proofFile) return jsonError("A payment screenshot is required for this payment method.");
     if (proofFile && payload.paymentProofAccepted !== true) return jsonError("Please confirm the payment-proof privacy notice.");
     const proof = proofFile ? await validatePaymentProofImage(proofFile, proofFile.name) : null;
 
@@ -236,7 +237,7 @@ export async function POST(request: Request) {
         securityCheckAmount: securityCheckAgorot / 100,
         securityCheckMonths: settings.securityCheckMonths,
         securityCheckAccepted: true,
-        paymentProofReceived: proof ? true : form.method === "Cash" ? undefined : false,
+        paymentProofReceived: proof ? true : isCashMethod ? undefined : false,
       },
       sections: effectiveAgreementSections.map((section) => ({
         id: sectionKey(section.title),
@@ -321,7 +322,7 @@ export async function POST(request: Request) {
       form.father || null, form.fatherPhone || null, form.email, form.mother || null, form.motherPhone || null, form.email,
       form.emergencyName, form.emergencyPhone, form.emergencyRelation, encryptedCare, careEnvelope.iv || null,
       form.method, registrationFeeAgorot, monthlyFeeAgorot, juneFeeAgorot, securityCheckAgorot,
-      proof ? "uploaded" : form.method === "Cash" ? "not_required" : "not_provided",
+      proof ? "uploaded" : isCashMethod ? "not_required" : "not_provided",
       pricingSnapshot, safeFormSnapshot, downloadTokenHash, signedAt, signedAt, signedAt, signedAt,
     ));
 

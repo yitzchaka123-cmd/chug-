@@ -85,3 +85,21 @@ export function combineLocalDateTime(date: string, time: string) {
   return `${date}T${/^\d{2}:\d{2}$/.test(time) ? time : "17:00"}`;
 }
 
+export function jerusalemNowLocal() {
+  return new Intl.DateTimeFormat("sv-SE", {
+    timeZone: JERUSALEM_TIME_ZONE,
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hour12: false,
+  }).format(new Date()).replace(" ", "T");
+}
+
+// Zoneless timestamps (from datetime-local inputs) are interpreted as Israel
+// local time; explicit-offset timestamps compare as instants.
+export function isPastInJerusalem(value: string) {
+  if (/(?:Z|[+-]\d{2}:?\d{2})$/i.test(value)) {
+    const instant = new Date(value).getTime();
+    return Number.isFinite(instant) && instant <= Date.now();
+  }
+  return value.slice(0, 16) <= jerusalemNowLocal();
+}
+

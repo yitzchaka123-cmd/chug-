@@ -70,6 +70,18 @@ export async function createStoredPasscode(passcode: string) {
   return { passcodeSalt, passcodeHash: await derivePasscode(passcode, passcodeSalt) };
 }
 
+export async function verifyAdminPasscode(runtime: ChoirRuntimeEnv, adminId: string, passcode: string) {
+  if (!passcode || passcode.length > 128) return false;
+  const admin = await runtime.DB.prepare(`
+    SELECT id, passcode_hash, passcode_salt FROM admin_users WHERE id = ? AND status = 'active' LIMIT 1
+  `).bind(adminId).first<AdminRow>();
+  if (!admin) return false;
+  if (admin.passcode_hash && admin.passcode_salt) {
+    return constantTimeEqual(await derivePasscode(passcode, admin.passcode_salt), admin.passcode_hash);
+  }
+  return constantTimeEqual(passcode, runtime.CHOIR_ADMIN_PASSCODE);
+}
+
 async function requestFingerprint(request: Request, runtime: ChoirRuntimeEnv) {
   const ip = request.headers.get("cf-connecting-ip")
     || request.headers.get("x-forwarded-for")?.split(",")[0]?.trim()

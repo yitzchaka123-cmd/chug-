@@ -14,6 +14,7 @@ export type PaymentMethodSetting = {
   label: string;
   instructions: string;
   proofPolicy: "required" | "optional" | "none";
+  cashHandling: boolean;
   isDefault: boolean;
 };
 
@@ -86,7 +87,7 @@ const defaultMethods = [
   { code: "bit", label: "Bit", instructions: "Complete the Bit transfer and keep the confirmation for your records.", proof: "required", order: 20, preferred: 0 },
   { code: "standing-order", label: "Standing order", instructions: "Set the standing order for the configured monthly due date.", proof: "optional", order: 30, preferred: 0 },
   { code: "checks", label: "Checks", instructions: "Provide checks according to the annual payment schedule.", proof: "optional", order: 40, preferred: 0 },
-  { code: "cash", label: "Cash", instructions: "Send the monthly payment on time with your daughter.", proof: "none", order: 50, preferred: 0 },
+  { code: "cash", label: "Cash", instructions: "Send the monthly payment on time with your daughter.", proof: "none", order: 50, preferred: 0, cash: 1 },
 ] as const;
 
 export async function ensureSystemSeed(db: D1Database) {
@@ -126,9 +127,9 @@ export async function ensureSystemSeed(db: D1Database) {
   for (const method of defaultMethods) {
     statements.push(db.prepare(`
       INSERT OR IGNORE INTO payment_methods (
-        id, school_year_id, code, label, instructions, proof_policy, enabled, is_default, sort_order, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)
-    `).bind(`payment-method-${CURRENT_SCHOOL_YEAR_ID}-${method.code}`, CURRENT_SCHOOL_YEAR_ID, method.code, method.label, method.instructions, method.proof, method.preferred, method.order, now, now));
+        id, school_year_id, code, label, instructions, proof_policy, cash_handling, enabled, is_default, sort_order, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)
+    `).bind(`payment-method-${CURRENT_SCHOOL_YEAR_ID}-${method.code}`, CURRENT_SCHOOL_YEAR_ID, method.code, method.label, method.instructions, method.proof, "cash" in method ? method.cash : 0, method.preferred, method.order, now, now));
   }
   await db.batch(statements);
   return contentHash;
@@ -156,16 +157,17 @@ export async function ensureCurrentRegistrationConfig(db: D1Database, requestedY
   try { settings = JSON.parse(year.settings_json) as Record<string, unknown>; } catch { settings = {}; }
 
   const methodRows = await db.prepare(`
-    SELECT id, code, label, instructions, proof_policy, is_default
+    SELECT id, code, label, instructions, proof_policy, cash_handling, is_default
     FROM payment_methods WHERE school_year_id = ? AND enabled = 1
     ORDER BY sort_order, label
-  `).bind(year.id).all<{ id: string; code: string; label: string; instructions: string; proof_policy: string; is_default: number }>();
+  `).bind(year.id).all<{ id: string; code: string; label: string; instructions: string; proof_policy: string; cash_handling: number; is_default: number }>();
   const paymentMethodRecords = methodRows.results.map((method) => ({
     id: method.id,
     code: method.code,
     label: method.label,
     instructions: method.instructions,
     proofPolicy: (["required", "optional", "none"].includes(method.proof_policy) ? method.proof_policy : "optional") as PaymentMethodSetting["proofPolicy"],
+    cashHandling: Boolean(method.cash_handling),
     isDefault: Boolean(method.is_default),
   }));
 

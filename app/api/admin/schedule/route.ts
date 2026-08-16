@@ -132,3 +132,22 @@ export async function PATCH(request: Request) {
   }
 }
 
+export async function DELETE(request: Request) {
+  try {
+    const runtime = getRuntimeEnv();
+    const admin = await requireAdminSession(request, runtime);
+    if (!admin) return Response.json({ error: "Administrator sign-in required." }, { status: 401 });
+    const id = value(new URL(request.url).searchParams.get("id"), 80);
+    const row = await runtime.DB.prepare(`SELECT id, school_year_id, title_en, starts_at FROM schedule_events WHERE id = ? LIMIT 1`).bind(id).first<{ id: string; school_year_id: string; title_en: string; starts_at: string }>();
+    if (!row) return Response.json({ error: "Schedule event not found." }, { status: 404 });
+    const now = new Date().toISOString();
+    await runtime.DB.batch([
+      runtime.DB.prepare(`DELETE FROM schedule_events WHERE id = ?`).bind(id),
+      runtime.DB.prepare(`INSERT INTO audit_log (school_year_id, actor_type, actor_id, action, entity_type, entity_id, summary, changes_json, created_at) VALUES (?, 'admin', ?, 'schedule_event.deleted', 'schedule_event', ?, 'Schedule event deleted', ?, ?)`).bind(row.school_year_id, admin.id, id, JSON.stringify({ title: row.title_en, startsAt: row.starts_at }), now),
+    ]);
+    return Response.json({ deleted: true }, { headers: { "Cache-Control": "no-store" } });
+  } catch (error) {
+    return Response.json({ error: error instanceof Error ? error.message : "Schedule event could not be deleted." }, { status: 500 });
+  }
+}
+

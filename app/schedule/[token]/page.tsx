@@ -10,7 +10,7 @@ type ScheduleData = {
   announcement: { title: string | null; body: string | null; updatedAt: string | null } | null;
   month: string;
   events: Array<{ id: string; kind: string; title_en: string; title_he: string | null; starts_at: string; ends_at: string | null; location: string | null; note: string | null; status: string; date: string; labels: { hebrewEn: string; hebrewHe: string }; holiday: { en: string; he: string } | null }>;
-  next: Record<string, unknown> | null;
+  next: { id: string; title_en: string; starts_at: string; ends_at: string | null; location: string | null } | null;
 };
 
 function addMonth(value: string, amount: number) {
@@ -58,6 +58,7 @@ export default function ParentSchedule({ params }: { params: Promise<{ token: st
         <>
           <section className="schedule-hero"><p className="eyebrow">{data.year.name}</p><h1>{data.group?.name || "Group schedule"}</h1>{data.group ? <p>{[data.group.startTime && data.group.endTime ? `${data.group.startTime}–${data.group.endTime}` : "", data.group.location || ""].filter(Boolean).join(" · ")}</p> : <p>Your group schedule is being prepared. This same private link will update automatically after group placement.</p>}</section>
           {data.announcement && <section className="schedule-announcement"><strong>{data.announcement.title || "Update"}</strong>{data.announcement.body && <p>{data.announcement.body}</p>}</section>}
+          {data.next && <section className="schedule-announcement"><strong>Next session</strong><p>{new Date(`${data.next.starts_at.slice(0, 10)}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })} · {data.next.starts_at.slice(11, 16)}{data.next.ends_at ? `–${data.next.ends_at.slice(11, 16)}` : ""}{data.next.location ? ` · ${data.next.location}` : ""}</p></section>}
           {data.group && <section className="parent-calendar">
             <div className="calendar-toolbar"><button onClick={() => setMonth(addMonth(month, -1))} aria-label="Previous month">←</button><h2>{monthLabel}</h2><button onClick={() => setMonth(addMonth(month, 1))} aria-label="Next month">→</button></div>
             <div className="calendar-weekdays">{["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => <span key={day}>{day}</span>)}</div>

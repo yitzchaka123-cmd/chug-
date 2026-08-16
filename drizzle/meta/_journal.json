@@ -22,6 +22,13 @@
       "when": 1786720155788,
       "tag": "0002_sharp_skaar",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1786839873129,
+      "tag": "0003_crazy_cammi",
+      "breakpoints": true
     }
   ]
 }

@@ -65,12 +65,13 @@ custom link created through the UI with any blank money field offered that fee f
 and the frozen agreement would have signed it that way. **Fixed:** `agorot()` now returns
 NULL for null/undefined/blank input; an explicit `0` still means free.
 
-## Broken or risky — NOT fixed (needs a product/security decision)
+## Broken or risky — fixed in the follow-up build-out
 
-These were found by the audit but deliberately left unchanged, because each requires a
-behavior decision by the operator. They are ordered by severity.
+All findings below were fixed after the operator chose the approach for the three open
+product decisions (passcode-confirmed administrator changes, delete-with-guard, and a
+per-method cash-handling toggle).
 
-### F-07 · Resuming a saved draft silently drops custom-link pricing
+### F-07 · Resuming a saved draft silently drops custom-link pricing — FIXED
 `app/register/page.tsx:137-140` rebuilds the resume URL as `/register?resume=<token>` only,
 discarding the server-provided URL that includes the `offer` token
 (`app/api/registrations/draft/route.ts:81`), and never restores the round-tripped
@@ -79,52 +80,52 @@ discarding the server-provided URL that includes the `offer` token
 first save the client appends `offer=` a second time to a URL that already contains it
 (`app/register/page.tsx:327`), producing `?resume=X&offer=T&offer=T`.
 
-### F-08 · Admin can never see medical/emergency details in the UI
+### F-08 · Admin can never see medical/emergency details in the UI — FIXED
 `app/api/admin/registrations/[id]/route.ts` decrypts and returns allergies, medical notes,
 medications and emergency contacts in `registration.care`, and the client types the field —
 but `StudentDrawer` (`app/admin/page.tsx:134-136`) never renders it. The only way to see a
 child's allergy information is the signed PDF. The spec's student profile requires it.
 
-### F-09 · "Payments missing" metric undercounts to zero
+### F-09 · "Payments missing" metric undercounts to zero — FIXED
 `statusLabel()` in `app/api/admin/registrations/route.ts:50-55` returns "Approved" before
 checking for missing payments, so the dashboard `paymentsMissing` metric counts only
 students who are *not yet approved* and also owe money. For the normal case — approved
 students with unpaid months — the dashboard tile and the "payments missing this month"
 attention row permanently read 0.
 
-### F-10 · Settings PATCH can silently erase the recovery email
+### F-10 · Settings PATCH can silently erase the recovery email — FIXED
 `app/api/admin/settings/route.ts:35-43` always runs the `UPDATE admin_users SET email = ?,
 recovery_email = ?` statement. When `administratorEmail` is absent or empty in the request
 body it writes `NULL`, wiping the recovery address. The current admin UI always sends the
 field, but any other client (or a future UI change) that PATCHes settings without it will
 destroy the recovery path. Recommend: only update the email when the field is present.
 
-### F-11 · Hardcoded "Cash" label breaks when the method is renamed
+### F-11 · Hardcoded "Cash" label breaks when the method is renamed — FIXED
 `app/register/page.tsx:226-227,267` and `app/api/registrations/submit/route.ts:172,175`
 gate the cash-responsibility reminder and the proof-upload exemption on the literal label
 `"Cash"`. Payment-method labels are admin-editable; renaming or re-adding the method under
 another name (e.g. "מזומן") silently disables the reminder and forces proof upload on cash
 payers. Recommend keying on the method's `code` instead of its display label.
 
-### F-12 · Custom-link expiry ignores the Israel timezone
+### F-12 · Custom-link expiry ignores the Israel timezone — FIXED
 The admin form sends `expiresAt` from `<input type="datetime-local">` without a zone
 (`app/admin/page.tsx:157`); `lib/pricing.ts:34` parses it with `new Date(...)` in the
 server's UTC context, so links expire 2–3 hours earlier than the administrator intended.
 
-### F-13 · Proof-required toggle always writes to the active year
+### F-13 · Proof-required toggle always writes to the active year — FIXED
 `SettingsPanel.save()` PATCHes `/api/admin/settings`, whose handler resolves the year via
 `ensureCurrentRegistrationConfig` with no `yearId` (`app/api/admin/settings/route.ts:31`).
 With a non-active year selected in the header dropdown, the toggle silently changes the
 *active* year's setting instead.
 
-### F-14 · Spec §13 security requirements not implemented in Settings
+### F-14 · Spec §13 security requirements not implemented in Settings — FIXED
 The spec requires that changing the administrator email "requires verification of the new
 address" and changing the passcode "requires the current passcode or a verified recovery
 flow". `app/api/admin/settings/route.ts` accepts both changes with nothing but an active
 session — no current-passcode confirmation and no email verification round-trip. A hijacked
 or left-open session can silently take over the account and redirect recovery.
 
-### F-15 · Spec §12 WhatsApp helpers are essentially unimplemented
+### F-15 · Spec §12 WhatsApp helpers are essentially unimplemented — FIXED
 The spec describes seven prepared WhatsApp message templates (registration received,
 missing information, missing proof, payment reminder, payment confirmed, group assignment,
 session update) with auto-inserted names/amounts/links and an edit step. What exists is a
@@ -132,7 +133,7 @@ single "Copy WhatsApp details" button in the student drawer (`app/admin/page.tsx
 that copies name/parent/phone, plus a cancellation `wa.me` link on the public page.
 The templated-helper feature is missing.
 
-## Incomplete features (backend exists, UI never uses it — or vice versa)
+## Incomplete features — all completed in the follow-up build-out
 
 - **Registration fee never shown to the parent.** `app/register/page.tsx:34,218` fetches
   the registration fee from `/api/registration-config` but step 4 renders only monthly,
@@ -186,3 +187,57 @@ The templated-helper feature is missing.
 - Cron maintenance route requires `Authorization: Bearer $CRON_SECRET`, matching the
   Vercel cron configuration in `vercel.json`.
 - `@vercel/blob` private `get()` usage matches the installed v2.8 API shape.
+
+## Follow-up build-out (same branch, second commit)
+
+Every finding above marked FIXED, and every item in the incomplete-features list, was
+implemented after the operator decided the three open product questions. Summary of what
+changed:
+
+- **Draft resume keeps custom pricing (F-07):** the register page now loads the saved
+  draft first, restores its `offerToken`, fetches the registration configuration with that
+  offer, and keeps the offer in the address bar and the copied return link. The duplicated
+  `offer=` parameter is gone.
+- **Medical details visible (F-08):** the student drawer has an "Emergency & medical"
+  section showing emergency contact, allergies, medical information, medication and the
+  private note, plus a payment-proof status row, and the proof thumbnail now shows the
+  stored image.
+- **Payments-missing metric (F-09):** missing current-month payment is now a separate
+  `missingPayment` flag per student (shown as its own tile chip), and the dashboard metric
+  counts all non-archived students with an open current-month item — approved or not.
+- **Settings hardening (F-10, F-13, F-14):** the administrator email is only updated when
+  the field is sent and different; changing the email or passcode requires re-entering the
+  current passcode (server-verified, per the operator's decision); the proof-required
+  toggle and cash-reminder text are saved to the year selected in the header; both changes
+  are audit-logged.
+- **Cash handling (F-11):** payment methods carry a `cash_handling` flag (new D1 + Postgres
+  migrations, seeded and backfilled for the existing "cash" method). The registration page,
+  submit handler and admin UI use the flag — renaming the method no longer breaks the cash
+  reminder or proof exemption. The flag is editable per method in the Payments tab.
+- **Israel-time expiry (F-12):** zoneless `expiresAt` values are compared in Asia/Jerusalem
+  (`lib/calendar.ts` → `isPastInJerusalem`), matching how the rest of the system stores
+  local times.
+- **WhatsApp helpers (F-15):** a review-first WhatsApp composer (nothing sends
+  automatically). The student drawer offers six templates — registration received, missing
+  information, missing proof, payment reminder (with the exact open amount), payment
+  confirmed, and group assignment with the private schedule link — prefilled with the
+  parent's phone. Group cards offer session-update and cancellation templates including the
+  group's live schedule link. Every message is editable before opening WhatsApp or copying.
+- **Completed features:** registration fee shown on the payment step; server-side student
+  search (debounced, so search covers records beyond the 250-row page); sessions can be
+  cancelled/restored and deleted from the calendar, with the cancelled state flowing to the
+  parent page and printed schedule; per-month price overrides and a private note on custom
+  links; custom-link reset (token rotation) and delete; payment-method label/instructions
+  editing and delete; group weekday selection, correct weekday display, and group delete;
+  per-year security-check amount editing; email-outbox retry (single and all); current
+  document logo shown in Documents; saved prompt history with reuse in the creative studio;
+  "next session" banner on the parent schedule; honest per-section approval marks on the
+  A4 preview; the dead "•••" button and the unused `app/chatgpt-auth.ts` removed.
+- **Deletion policy (operator's decision):** hard delete with safety guards — groups with
+  assigned students, payment methods used by registrations, and custom links already used
+  are blocked with a clear message suggesting disable/reassign instead; every delete is
+  recorded in the activity history.
+- **Test coverage:** the worker end-to-end test now also verifies the blank-fee custom link
+  falls back to standard pricing, the cash method's flag is seeded, settings changes demand
+  the current passcode, decrypted medical details reach the admin API, server-side search
+  filters, and the delete guards return 409 for in-use records.

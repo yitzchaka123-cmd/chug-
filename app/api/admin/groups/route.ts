@@ -125,3 +125,25 @@ export async function PATCH(request: Request) {
   }
 }
 
+export async function DELETE(request: Request) {
+  try {
+    const runtime = getRuntimeEnv();
+    const admin = await requireAdminSession(request, runtime);
+    if (!admin) return Response.json({ error: "Administrator sign-in required." }, { status: 401 });
+    const id = value(new URL(request.url).searchParams.get("id"), 80);
+    const group = await runtime.DB.prepare(`SELECT id, school_year_id, name FROM groups WHERE id = ? LIMIT 1`).bind(id).first<{ id: string; school_year_id: string; name: string }>();
+    if (!group) return Response.json({ error: "Group not found." }, { status: 404 });
+    const members = await runtime.DB.prepare(`SELECT COUNT(*) AS count FROM enrollments WHERE group_id = ? AND status = 'active'`).bind(id).first<{ count: number }>();
+    if ((members?.count || 0) > 0) return Response.json({ error: `${group.name} still has ${members!.count} assigned student${members!.count === 1 ? "" : "s"}. Move them to another group first.` }, { status: 409 });
+    const now = new Date().toISOString();
+    await runtime.DB.batch([
+      runtime.DB.prepare(`UPDATE schedule_events SET group_id = NULL, updated_at = ? WHERE group_id = ?`).bind(now, id),
+      runtime.DB.prepare(`DELETE FROM groups WHERE id = ?`).bind(id),
+      runtime.DB.prepare(`INSERT INTO audit_log (school_year_id, actor_type, actor_id, action, entity_type, entity_id, summary, changes_json, created_at) VALUES (?, 'admin', ?, 'group.deleted', 'group', ?, 'Group deleted', ?, ?)`).bind(group.school_year_id, admin.id, id, JSON.stringify({ name: group.name }), now),
+    ]);
+    return Response.json({ deleted: true }, { headers: { "Cache-Control": "no-store" } });
+  } catch (error) {
+    return Response.json({ error: error instanceof Error ? error.message : "Group could not be deleted." }, { status: 500 });
+  }
+}
+

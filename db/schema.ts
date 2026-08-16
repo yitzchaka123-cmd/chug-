@@ -293,6 +293,7 @@ export const paymentMethods = sqliteTable(
     label: text("label").notNull(),
     instructions: text("instructions").notNull().default(""),
     proofPolicy: text("proof_policy").notNull().default("optional"),
+    cashHandling: integer("cash_handling", { mode: "boolean" }).notNull().default(false),
     enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
     isDefault: integer("is_default", { mode: "boolean" }).notNull().default(false),
     sortOrder: integer("sort_order").notNull().default(0),

@@ -29,7 +29,7 @@ export default function RegistrationPreview() {
   const [proofFile, setProofFile] = useState<File | null>(null);
   const [proofUploadRequired, setProofUploadRequired] = useState(choirConfig.currentYear.payment.proofUpload === "required");
   const [paymentMethods, setPaymentMethods] = useState<readonly string[]>(choirConfig.currentYear.payment.methods);
-  const [paymentMethodRecords, setPaymentMethodRecords] = useState<Array<{ label: string; instructions: string; proofPolicy: "required" | "optional" | "none" }>>([]);
+  const [paymentMethodRecords, setPaymentMethodRecords] = useState<Array<{ label: string; instructions: string; proofPolicy: "required" | "optional" | "none"; cashHandling: boolean }>>([]);
   const [paymentAmounts, setPaymentAmounts] = useState<{ registration: number; monthly: number; june: number; securityCheck: number; securityCheckMonths: string }>({
     registration: choirConfig.currentYear.payment.registrationFeeAmount,
     monthly: choirConfig.currentYear.payment.monthlyAmount,
@@ -75,57 +75,67 @@ export default function RegistrationPreview() {
 
   useEffect(() => {
     let active = true;
-    const offer = new URLSearchParams(window.location.search).get("offer")?.trim() || "";
-    fetch(`/api/registration-config${offer ? `?offer=${encodeURIComponent(offer)}` : ""}`, { cache: "no-store" })
-      .then(async (response) => {
-        const result = await response.json() as { error?: string; year?: string; agreementVersion?: string; agreementSections?: AgreementSection[]; proofUploadRequired?: boolean; cashReminderText?: string; paymentMethods?: string[]; paymentMethodRecords?: Array<{ label: string; instructions: string; proofPolicy: "required" | "optional" | "none" }>; securityCheckMonths?: string; customOffer?: { label?: string }; homeAddressEnabled?: boolean; schoolEnabled?: boolean; schedule?: { weekday?: number; sessionLengthMinutes?: number; location?: string }; amounts?: { registration?: number; monthly?: number; june?: number; securityCheck?: number } };
-        if (!response.ok) throw new Error(result.error || "Registration settings could not be loaded.");
-        return result;
-      })
-      .then((settings) => {
-        if (!active) return;
-        setOfferToken(offer);
-        if (settings.year) setRegistrationYear(settings.year);
-        if (settings.agreementVersion) setActiveAgreementVersion(settings.agreementVersion);
-        if (Array.isArray(settings.agreementSections) && settings.agreementSections.length) {
-          setActiveAgreementSections(settings.agreementSections);
-          const approvalCount = settings.agreementSections.filter((section) => section.title !== "Introduction").length;
-          setApprovals((current) => Array.from({ length: approvalCount }, (_, index) => current[index] || false));
-        }
-        if (settings.customOffer?.label) setCustomOfferLabel(settings.customOffer.label);
-        setHomeAddressEnabled(settings.homeAddressEnabled === true);
-        setSchoolEnabled(settings.schoolEnabled === true);
-        if (settings.schedule) setScheduleInfo({ sessionLength: `${settings.schedule.sessionLengthMinutes || 50} minutes`, location: settings.schedule.location || choirConfig.currentYear.location, day: ["Sundays", "Mondays", "Tuesdays", "Wednesdays", "Thursdays", "Fridays", "Saturdays"][settings.schedule.weekday ?? 3] || "Wednesdays" });
-        if (typeof settings.proofUploadRequired === "boolean") setProofUploadRequired(settings.proofUploadRequired);
-        if (settings.cashReminderText) setCashReminderText(settings.cashReminderText);
-        if (Array.isArray(settings.paymentMethodRecords)) setPaymentMethodRecords(settings.paymentMethodRecords);
-        if (Array.isArray(settings.paymentMethods) && settings.paymentMethods.length) {
-          setPaymentMethods(settings.paymentMethods);
-          setForm((current) => settings.paymentMethods!.includes(current.method) ? current : { ...current, method: settings.paymentMethods![0] });
-        }
-        if (settings.amounts) setPaymentAmounts((current) => ({
-          registration: typeof settings.amounts?.registration === "number" ? settings.amounts.registration : current.registration,
-          monthly: typeof settings.amounts?.monthly === "number" ? settings.amounts.monthly : current.monthly,
-          june: typeof settings.amounts?.june === "number" ? settings.amounts.june : current.june,
-          securityCheck: typeof settings.amounts?.securityCheck === "number" ? settings.amounts.securityCheck : current.securityCheck,
-          securityCheckMonths: settings.securityCheckMonths || current.securityCheckMonths,
-        }));
-      })
-      .catch((error) => setSubmissionError(error instanceof Error ? error.message : "Registration settings could not be loaded."));
-    return () => { active = false; };
-  }, []);
+    const params = new URLSearchParams(window.location.search);
+    const urlOffer = params.get("offer")?.trim() || "";
+    const resumeToken = params.get("resume")?.trim() || "";
 
-  useEffect(() => {
-    const token = new URLSearchParams(window.location.search).get("resume");
-    if (!token) return;
-    fetch(`/api/registrations/draft?token=${encodeURIComponent(token)}`, { cache: "no-store" })
-      .then(async (response) => {
-        const result = await response.json() as { data?: Record<string, unknown>; error?: string; token?: string };
-        if (!response.ok || !result.data) throw new Error(result.error || "Saved progress could not be loaded.");
-        return result;
-      })
-      .then((result) => {
-        const data = result.data!;
+    async function loadConfig(offer: string) {
+      const response = await fetch(`/api/registration-config${offer ? `?offer=${encodeURIComponent(offer)}` : ""}`, { cache: "no-store" });
+      const settings = await response.json() as { error?: string; year?: string; agreementVersion?: string; agreementSections?: AgreementSection[]; proofUploadRequired?: boolean; cashReminderText?: string; paymentMethods?: string[]; paymentMethodRecords?: Array<{ label: string; instructions: string; proofPolicy: "required" | "optional" | "none"; cashHandling?: boolean }>; securityCheckMonths?: string; customOffer?: { label?: string }; homeAddressEnabled?: boolean; schoolEnabled?: boolean; schedule?: { weekday?: number; sessionLengthMinutes?: number; location?: string }; amounts?: { registration?: number; monthly?: number; june?: number; securityCheck?: number } };
+      if (!response.ok) throw new Error(settings.error || "Registration settings could not be loaded.");
+      if (!active) return;
+      if (settings.year) setRegistrationYear(settings.year);
+      if (settings.agreementVersion) setActiveAgreementVersion(settings.agreementVersion);
+      if (Array.isArray(settings.agreementSections) && settings.agreementSections.length) {
+        setActiveAgreementSections(settings.agreementSections);
+        const approvalCount = settings.agreementSections.filter((section) => section.title !== "Introduction").length;
+        setApprovals((current) => Array.from({ length: approvalCount }, (_, index) => current[index] || false));
+      }
+      if (settings.customOffer?.label) setCustomOfferLabel(settings.customOffer.label);
+      setHomeAddressEnabled(settings.homeAddressEnabled === true);
+      setSchoolEnabled(settings.schoolEnabled === true);
+      if (settings.schedule) setScheduleInfo({ sessionLength: `${settings.schedule.sessionLengthMinutes || 50} minutes`, location: settings.schedule.location || choirConfig.currentYear.location, day: ["Sundays", "Mondays", "Tuesdays", "Wednesdays", "Thursdays", "Fridays", "Saturdays"][settings.schedule.weekday ?? 3] || "Wednesdays" });
+      if (typeof settings.proofUploadRequired === "boolean") setProofUploadRequired(settings.proofUploadRequired);
+      if (settings.cashReminderText) setCashReminderText(settings.cashReminderText);
+      if (Array.isArray(settings.paymentMethodRecords)) setPaymentMethodRecords(settings.paymentMethodRecords.map((record) => ({ ...record, cashHandling: record.cashHandling === true })));
+      if (Array.isArray(settings.paymentMethods) && settings.paymentMethods.length) {
+        setPaymentMethods(settings.paymentMethods);
+        setForm((current) => settings.paymentMethods!.includes(current.method) ? current : { ...current, method: settings.paymentMethods![0] });
+      }
+      if (settings.amounts) setPaymentAmounts((current) => ({
+        registration: typeof settings.amounts?.registration === "number" ? settings.amounts.registration : current.registration,
+        monthly: typeof settings.amounts?.monthly === "number" ? settings.amounts.monthly : current.monthly,
+        june: typeof settings.amounts?.june === "number" ? settings.amounts.june : current.june,
+        securityCheck: typeof settings.amounts?.securityCheck === "number" ? settings.amounts.securityCheck : current.securityCheck,
+        securityCheckMonths: settings.securityCheckMonths || current.securityCheckMonths,
+      }));
+    }
+
+    async function boot() {
+      let offer = urlOffer;
+      let draft: { token: string; data: Record<string, unknown> } | null = null;
+      if (resumeToken) {
+        try {
+          const response = await fetch(`/api/registrations/draft?token=${encodeURIComponent(resumeToken)}`, { cache: "no-store" });
+          const result = await response.json() as { data?: Record<string, unknown>; error?: string; token?: string };
+          if (!response.ok || !result.data) throw new Error(result.error || "Saved progress could not be loaded.");
+          draft = { token: result.token || resumeToken, data: result.data };
+          const draftOffer = typeof result.data.offerToken === "string" ? result.data.offerToken.trim() : "";
+          if (draftOffer) offer = draftOffer;
+        } catch (error) {
+          if (active) setSubmissionError(error instanceof Error ? error.message : "Saved progress could not be loaded.");
+        }
+      }
+      try {
+        await loadConfig(offer);
+      } catch (error) {
+        if (active) setSubmissionError(error instanceof Error ? error.message : "Registration settings could not be loaded.");
+        return;
+      }
+      if (!active) return;
+      setOfferToken(offer);
+      if (draft) {
+        const data = draft.data;
         if (data.form && typeof data.form === "object") setForm((current) => ({ ...current, ...(data.form as Partial<typeof current>) }));
         if (typeof data.step === "number") setStep(Math.min(4, Math.max(0, Math.floor(data.step))));
         if (Array.isArray(data.approvals)) setApprovals(data.approvals.map(Boolean));
@@ -134,12 +144,15 @@ export default function RegistrationPreview() {
         if (typeof data.guardianAccepted === "boolean") setGuardianAccepted(data.guardianAccepted);
         if (typeof data.privacyAccepted === "boolean") setPrivacyAccepted(data.privacyAccepted);
         if (typeof data.electronicSignatureAccepted === "boolean") setElectronicSignatureAccepted(data.electronicSignatureAccepted);
-        setDraftToken(result.token || token);
-        setResumeUrl(`${window.location.origin}/register?resume=${encodeURIComponent(result.token || token)}`);
+        setDraftToken(draft.token);
+        setResumeUrl(`${window.location.origin}/register?resume=${encodeURIComponent(draft.token)}${offer ? `&offer=${encodeURIComponent(offer)}` : ""}`);
         setSaved("Saved progress restored");
-        window.history.replaceState({}, "", "/register");
-      })
-      .catch((error) => setSubmissionError(error instanceof Error ? error.message : "Saved progress could not be loaded."));
+        window.history.replaceState({}, "", `/register${offer ? `?offer=${encodeURIComponent(offer)}` : ""}`);
+      }
+    }
+
+    void boot();
+    return () => { active = false; };
   }, []);
 
   const age = useMemo(() => {
@@ -223,8 +236,9 @@ export default function RegistrationPreview() {
   };
   const activeApprovalSections = activeAgreementSections.filter((section) => section.title !== "Introduction");
   const selectedMethod = paymentMethodRecords.find((method) => method.label === form.method);
-  const paymentRequiresProof = form.method !== "Cash" && (selectedMethod ? selectedMethod.proofPolicy === "required" : proofUploadRequired);
-  const paymentAllowsProof = form.method !== "Cash" && selectedMethod?.proofPolicy !== "none";
+  const isCashMethod = selectedMethod ? selectedMethod.cashHandling : form.method === "Cash";
+  const paymentRequiresProof = !isCashMethod && (selectedMethod ? selectedMethod.proofPolicy === "required" : proofUploadRequired);
+  const paymentAllowsProof = !isCashMethod && selectedMethod?.proofPolicy !== "none";
   const detailsComplete = Boolean(
     form.daughter.trim() &&
     /^\d{4}-\d{2}-\d{2}$/.test(form.birthdate) &&
@@ -264,7 +278,7 @@ export default function RegistrationPreview() {
 
   function goForward() {
     if (!canContinue) return;
-    if (step === 3 && form.method === "Cash") {
+    if (step === 3 && isCashMethod) {
       setCashReminderOpen(true);
       return;
     }
@@ -324,7 +338,7 @@ export default function RegistrationPreview() {
       const result = await response.json() as { token?: string; resumeUrl?: string; error?: string };
       if (!response.ok || !result.token || !result.resumeUrl) throw new Error(result.error || "Progress could not be saved.");
       setDraftToken(result.token);
-      setResumeUrl(`${window.location.origin}${result.resumeUrl}${offerToken ? `&offer=${encodeURIComponent(offerToken)}` : ""}`);
+      setResumeUrl(`${window.location.origin}${result.resumeUrl}`);
       setSaved("Progress saved");
     } catch (error) {
       setSubmissionError(error instanceof Error ? error.message : "Progress could not be saved.");
@@ -439,7 +453,7 @@ export default function RegistrationPreview() {
           {step === 3 && (
             <div className="form-section">
               <div className="form-section-title"><span>04</span><div><h2>Payment information</h2><p>Choose a method and add payment proof where applicable.</p></div></div>
-              <div className="payment-total monthly-payment"><span>Monthly choir payment</span><strong><bdi dir="ltr">₪{payment.monthlyAmount.toLocaleString("en-US")}</bdi><em>/month</em></strong><small>* June is <bdi dir="ltr">₪{payment.juneAmount.toLocaleString("en-US")}</bdi></small></div>
+              <div className="payment-total monthly-payment"><span>Monthly choir payment</span><strong><bdi dir="ltr">₪{payment.monthlyAmount.toLocaleString("en-US")}</bdi><em>/month</em></strong><small>* June is <bdi dir="ltr">₪{payment.juneAmount.toLocaleString("en-US")}</bdi>{payment.registrationFeeAmount > 0 && <> · One-time registration fee <bdi dir="ltr">₪{payment.registrationFeeAmount.toLocaleString("en-US")}</bdi></>}</small></div>
               <div className="payment-methods">
                 {paymentMethods.map((method) => <label className={form.method === method ? "selected" : ""} key={method}><input type="radio" name="payment" value={method} checked={form.method === method} onChange={(event) => { update("method", event.target.value); setProofName(""); setProofPreview(""); setProofFile(null); setPaymentProofAccepted(false); }} /><span>{method}</span></label>)}
               </div>
@@ -492,13 +506,17 @@ export default function RegistrationPreview() {
                   </dl>
                 </section>
                 <div className="contract-agreement">
-                  {activeAgreementSections.filter((section) => section.title !== "Introduction").map((section) => (
-                    <section key={section.title}>
-                      <h4>{section.title}</h4>
-                      {section.paragraphs.map((paragraph) => <div className="contract-paragraph" key={paragraph.id}><p>{paragraph.text}</p></div>)}
-                      <small className="contract-section-approval">✓ I understand</small>
-                    </section>
-                  ))}
+                  {activeAgreementSections.filter((section) => section.title !== "Introduction").map((section) => {
+                    const approvalIndex = activeApprovalSections.findIndex((candidate) => candidate.title === section.title);
+                    const approved = approvalIndex >= 0 && approvals[approvalIndex];
+                    return (
+                      <section key={section.title}>
+                        <h4>{section.title}</h4>
+                        {section.paragraphs.map((paragraph) => <div className="contract-paragraph" key={paragraph.id}><p>{paragraph.text}</p></div>)}
+                        <small className="contract-section-approval">{approved ? "✓ I understand" : "Not yet confirmed"}</small>
+                      </section>
+                    );
+                  })}
                 </div>
                 <section className="contract-confirmation">
                   <h4>Confirmation</h4>

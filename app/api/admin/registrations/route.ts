@@ -49,7 +49,6 @@ function birthdayWithinDays(value: string | null, days: number) {
 
 function statusLabel(row: RegistrationRow) {
   if (row.review_status === "approved") return "Approved";
-  if (row.missing_payments > 0) return "Missing payment";
   if (row.payment_proof_status === "uploaded") return "Proof uploaded";
   return "Awaiting approval";
 }
@@ -97,6 +96,7 @@ export async function GET(request: Request) {
         age: ageFromBirthDate(row.participant_birth_date),
         group: row.group_label || "Not assigned",
         status: statusLabel(row),
+        missingPayment: row.missing_payments > 0,
         parent: parentName,
         phone,
         submittedAt: row.submitted_at,
@@ -111,7 +111,7 @@ export async function GET(request: Request) {
     const metrics = {
       activeStudents: students.filter((student) => student.studentStatus !== "archived").length,
       awaitingApproval: students.filter((student) => student.status === "Awaiting approval" || student.status === "Proof uploaded").length,
-      paymentsMissing: students.filter((student) => student.status === "Missing payment").length,
+      paymentsMissing: students.filter((student) => student.missingPayment && student.studentStatus !== "archived").length,
       upcomingBirthdays: result.results.filter((row) => birthdayWithinDays(row.participant_birth_date, 30)).length,
     };
     const birthdays = result.results.filter((row) => birthdayWithinDays(row.participant_birth_date, 30)).map((row) => ({ name: row.participant_full_name, birthDate: row.participant_birth_date, age: ageFromBirthDate(row.participant_birth_date) }));

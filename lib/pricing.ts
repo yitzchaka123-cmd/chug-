@@ -1,3 +1,4 @@
+import { isPastInJerusalem } from "@/lib/calendar";
 import { ensureCurrentRegistrationConfig, type RegistrationSettings } from "@/lib/registration-defaults";
 import type { ChoirRuntimeEnv } from "@/lib/runtime-env";
 import { hashOpaqueToken } from "@/lib/security";
@@ -31,7 +32,7 @@ export async function resolveRegistrationOffer(runtime: ChoirRuntimeEnv, token: 
   const tokenHash = await hashOpaqueToken(token, runtime.CHOIR_TOKEN_SECRET);
   const row = await runtime.DB.prepare(`SELECT * FROM custom_registration_links WHERE token_hash = ? LIMIT 1`).bind(tokenHash).first<OfferRow>();
   if (!row || row.status !== "active") return null;
-  if (row.expires_at && new Date(row.expires_at).getTime() <= Date.now()) return null;
+  if (row.expires_at && isPastInJerusalem(row.expires_at)) return null;
   if (row.max_uses !== null && row.use_count >= row.max_uses) return null;
   const settings = await ensureCurrentRegistrationConfig(runtime.DB, row.school_year_id);
   let monthOverrides: Record<string, number> = {};

@@ -7,7 +7,7 @@ import { Miniflare } from "miniflare";
 
 const projectRoot = fileURLToPath(new URL("../", import.meta.url));
 const publicRoot = join(projectRoot, "public");
-const migrations = ["0000_fat_wilson_fisk.sql", "0001_calm_scarecrow.sql", "0002_sharp_skaar.sql"];
+const migrations = ["0000_fat_wilson_fisk.sql", "0001_calm_scarecrow.sql", "0002_sharp_skaar.sql", "0003_crazy_cammi.sql"];
 const mimeTypes = new Map([[".png", "image/png"], [".jpg", "image/jpeg"], [".jpeg", "image/jpeg"], [".ttf", "font/ttf"], [".svg", "image/svg+xml"]]);
 
 async function staticAsset(request) {
@@ -75,6 +75,8 @@ test("registration, custom pricing, schedules, PDFs, admin data and backups work
     assert.equal(standard.year, "2026–2027");
     assert.equal(standard.amounts.monthly, 200);
     assert.ok(standard.agreementSections.length > 8);
+    const cashMethod = standard.paymentMethodRecords.find((method) => method.code === "cash");
+    assert.equal(cashMethod?.cashHandling, true, "the seeded cash method must carry the cash-handling flag");
 
     const login = await request("/api/admin/session", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ passcode: "0331" }) });
     assert.equal(login.status, 200);
@@ -97,6 +99,18 @@ test("registration, custom pricing, schedules, PDFs, admin data and backups work
     assert.match(customAgreementText, /Test discount/);
     assert.match(customAgreementText, /Monthly Cost: 150₪/);
     assert.doesNotMatch(customAgreementText, /Monthly Cost: 200₪/);
+
+    const blankLink = await json(await request("/api/admin/custom-links", { method: "POST", headers: adminHeaders, body: JSON.stringify({ yearId, label: "Blank fees keep standard pricing", registrationFee: null, monthlyFee: null, juneFee: null, securityCheck: null, oneTimeAmount: null }) }));
+    const blankToken = new URL(blankLink.url).searchParams.get("offer");
+    const blankConfig = await json(await request(`/api/registration-config?offer=${encodeURIComponent(blankToken)}`));
+    assert.equal(blankConfig.amounts.monthly, standard.amounts.monthly, "blank custom-link fees must fall back to the standard year pricing, not ₪0");
+    assert.equal(blankConfig.amounts.registration, standard.amounts.registration);
+    assert.equal(blankConfig.amounts.june, standard.amounts.june);
+
+    const settingsDenied = await request("/api/admin/settings", { method: "PATCH", headers: adminHeaders, body: JSON.stringify({ proofUploadRequired: true, administratorEmail: "admin@example.invalid" }) });
+    assert.equal(settingsDenied.status, 403, "changing the administrator email must require the current passcode");
+    const settingsSaved = await json(await request("/api/admin/settings", { method: "PATCH", headers: adminHeaders, body: JSON.stringify({ proofUploadRequired: true, administratorEmail: "admin@example.invalid", currentPasscode: "0331" }) }));
+    assert.equal(settingsSaved.saved, true);
 
     const fakeForm = { daughter: "Test Student", birthdate: "2017-03-12", father: "Test Parent", fatherPhone: "0500000000", mother: "", motherPhone: "", email: "test-parent@example.invalid", emergencyName: "Test Contact", emergencyPhone: "0500000001", emergencyRelation: "Relative", allergies: "None", medical: "None", medications: "None", additionalNote: "", address: "", school: "", method: "Cash", signer: "Test Parent" };
     const draft = await json(await request("/api/registrations/draft", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ data: { form: fakeForm, step: 1, approvals: [], offerToken } }) }));
@@ -146,7 +160,24 @@ test("registration, custom pricing, schedules, PDFs, admin data and backups work
     assert.equal(schedulePdf.headers.get("content-type"), "application/pdf");
 
     const registrations = await json(await request(`/api/admin/registrations?yearId=${encodeURIComponent(yearId)}`, { headers: adminHeaders }));
-    assert.equal(registrations.students.some((student) => student.name === "Test Student"), true);
+    const testStudent = registrations.students.find((student) => student.name === "Test Student");
+    assert.ok(testStudent, "the submitted registration must appear in the student list");
+    assert.equal(typeof testStudent.missingPayment, "boolean");
+    const detail = await json(await request(`/api/admin/registrations/${encodeURIComponent(testStudent.id)}`, { headers: adminHeaders }));
+    assert.equal(detail.registration.proofStatus, "not_required", "cash registrations must not require payment proof");
+    assert.equal(detail.registration.care?.allergies, "None", "decrypted medical details must reach the administrator");
+
+    const searchHit = await json(await request(`/api/admin/registrations?yearId=${encodeURIComponent(yearId)}&q=Test%20Stu`, { headers: adminHeaders }));
+    assert.equal(searchHit.students.some((student) => student.name === "Test Student"), true);
+    const searchMiss = await json(await request(`/api/admin/registrations?yearId=${encodeURIComponent(yearId)}&q=No%20Such%20Name`, { headers: adminHeaders }));
+    assert.equal(searchMiss.students.length, 0);
+
+    const groupDeleteBlocked = await request(`/api/admin/groups?id=${encodeURIComponent(group.id)}`, { method: "DELETE", headers: adminHeaders });
+    assert.equal(groupDeleteBlocked.status, 409, "groups with assigned students must not be deletable");
+    const usedLinkDeleteBlocked = await request(`/api/admin/custom-links?id=${encodeURIComponent(offer.id)}`, { method: "DELETE", headers: adminHeaders });
+    assert.equal(usedLinkDeleteBlocked.status, 409, "custom links used by registrations must not be deletable");
+    const blankLinkDeleted = await json(await request(`/api/admin/custom-links?id=${encodeURIComponent(blankLink.id)}`, { method: "DELETE", headers: adminHeaders }));
+    assert.equal(blankLinkDeleted.deleted, true);
     const versions = await json(await request(`/api/admin/agreement-versions?yearId=${encodeURIComponent(yearId)}`, { headers: adminHeaders }));
     assert.equal(versions.versions[0].active, true);
     const prompt = await json(await request("/api/admin/prompts", { method: "POST", headers: adminHeaders, body: JSON.stringify({ yearId, kind: "detail-sheet", style: "warm editorial", save: true, facts: { brandName: "The Choir Chug", schoolYear: "2026–2027", schedule: "Wednesdays", fees: "150₪", customBrief: "Test-only" } }) }));

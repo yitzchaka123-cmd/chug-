@@ -11,6 +11,7 @@ next-env.d.ts
 # Local runtime state
 .sites-runtime/
 .wrangler/
+.vinext/
 
 # Environment and secrets — never commit real participant data or keys
 .env

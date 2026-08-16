@@ -108,3 +108,26 @@ export async function PATCH(request: Request) {
   }
 }
 
+export async function DELETE(request: Request) {
+  try {
+    const runtime = getRuntimeEnv();
+    const admin = await requireAdminSession(request, runtime);
+    if (!admin) return Response.json({ error: "Administrator sign-in required." }, { status: 401 });
+    const id = value(new URL(request.url).searchParams.get("id"), 80);
+    const row = await runtime.DB.prepare(`SELECT id, school_year_id, label, use_count FROM custom_registration_links WHERE id = ? LIMIT 1`).bind(id).first<{ id: string; school_year_id: string; label: string; use_count: number }>();
+    if (!row) return Response.json({ error: "Custom link not found." }, { status: 404 });
+    const used = await runtime.DB.prepare(`SELECT COUNT(*) AS count FROM registrations WHERE custom_registration_link_id = ?`).bind(id).first<{ count: number }>();
+    if ((row.use_count || 0) > 0 || (used?.count || 0) > 0) {
+      return Response.json({ error: "This link has already been used by registrations, so it is kept for the records. Disable it instead of deleting it." }, { status: 409 });
+    }
+    const now = new Date().toISOString();
+    await runtime.DB.batch([
+      runtime.DB.prepare(`DELETE FROM custom_registration_links WHERE id = ?`).bind(id),
+      runtime.DB.prepare(`INSERT INTO audit_log (school_year_id, actor_type, actor_id, action, entity_type, entity_id, summary, changes_json, created_at) VALUES (?, 'admin', ?, 'custom_link.deleted', 'custom_registration_link', ?, 'Custom registration link deleted', ?, ?)`).bind(row.school_year_id, admin.id, id, JSON.stringify({ label: row.label }), now),
+    ]);
+    return Response.json({ deleted: true }, { headers: { "Cache-Control": "no-store" } });
+  } catch (error) {
+    return Response.json({ error: error instanceof Error ? error.message : "Custom link could not be deleted." }, { status: 500 });
+  }
+}
+
