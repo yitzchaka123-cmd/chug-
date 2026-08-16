@@ -334,6 +334,8 @@ h2 { font-size: clamp(2.5rem, 4.8vw, 4.5rem); line-height: 0.98; }
   --hero-photo-height: 70vh;
   --hero-photo-radius: 48px;
   --hero-photo-border: 8px;
+  --hero-photo-exit-y: 0px;
+  --hero-photo-opacity: 1;
   --hero-decor-opacity: 1;
   --hero-panel-y: 100vh;
   --hero-panel-opacity: 0;
@@ -481,7 +483,9 @@ h2 { font-size: clamp(2.5rem, 4.8vw, 4.5rem); line-height: 0.98; }
   width: var(--hero-photo-width);
   height: var(--hero-photo-height);
   min-height: 0;
-  will-change: top, left, width, height;
+  transform: translate3d(0, var(--hero-photo-exit-y), 0);
+  opacity: var(--hero-photo-opacity);
+  will-change: top, left, width, height, transform, opacity;
 }
 .hero-photo-aura { position: absolute; inset: 3% -3% -3% 7%; border: 1px solid rgba(143,24,56,.16); border-radius: 58px 58px 128px 58px; background: rgba(255,255,255,.25); opacity: var(--hero-decor-opacity); transform: translate(22px,18px); }
 .hero-photo-wrap {

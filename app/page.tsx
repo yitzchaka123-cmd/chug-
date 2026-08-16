@@ -47,7 +47,9 @@ export default function Home() {
         const copyMorph = smoothstep(0.02, 0.22, progress);
         const copyExit = smoothstep(0.3, 0.46, progress);
         const photoExpand = smoothstep(0.18, 0.46, progress);
-        const photoDrift = smoothstep(0.46, 1, progress);
+        const photoDrift = smoothstep(0.46, 0.88, progress);
+        // The photo leaves with the panel instead of hanging on to the end.
+        const photoExit = smoothstep(0.86, 1, progress);
         const panelTravel = smoothstep(0.44, 0.95, progress);
         const panelFadeIn = smoothstep(0.42, 0.52, progress);
         const panelFadeOut = smoothstep(0.9, 1, progress);
@@ -112,7 +114,9 @@ export default function Home() {
         const finalPhotoHeight = viewportHeight - finalPhotoTop * 2;
 
         setHeroPixels("--hero-photo-left", mix(startPhotoLeft, finalPhotoInsetX, photoExpand));
-        setHeroPixels("--hero-photo-top", mix(startPhotoTop, finalPhotoTop, photoExpand) + photoDrift * (stackedHero ? 105 : 175));
+        setHeroPixels("--hero-photo-top", mix(startPhotoTop, finalPhotoTop, photoExpand));
+        setHeroPixels("--hero-photo-exit-y", -photoDrift * (stackedHero ? 24 : 38) - photoExit * viewportHeight * 0.52);
+        setHeroNumber("--hero-photo-opacity", 1 - photoExit);
         setHeroPixels("--hero-photo-width", mix(startPhotoWidth, finalPhotoWidth, photoExpand));
         setHeroPixels("--hero-photo-height", mix(startPhotoHeight, finalPhotoHeight, photoExpand));
         setHeroPixels("--hero-photo-radius", mix(stackedHero ? 28 : 48, stackedHero ? 24 : 40, photoExpand));
