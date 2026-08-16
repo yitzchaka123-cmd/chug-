@@ -60,6 +60,31 @@ export function holidayForDate(date: string): HolidayLabel | null {
   return fixedHolidays[`${parts.month}-${parts.day}`] || null;
 }
 
+// Israeli national observances by their fixed Hebrew-calendar dates. The Knesset
+// shifts some observances by a day or two around Shabbat in certain years; the
+// calendar builder shows these as planning hints, so the fixed dates are used.
+const israeliHolidays: Record<string, HolidayLabel> = {
+  "Nisan-27": { en: "Yom HaShoah", he: "יום השואה" },
+  "Iyar-4": { en: "Yom HaZikaron", he: "יום הזיכרון" },
+  "Iyar-5": { en: "Yom HaAtzmaut", he: "יום העצמאות" },
+  "Iyar-28": { en: "Yom Yerushalayim", he: "יום ירושלים" },
+};
+
+export function israeliHolidayForDate(date: string): HolidayLabel | null {
+  const parts = hebrewDateParts(date);
+  return israeliHolidays[`${parts.month}-${parts.day}`] || null;
+}
+
+// Lookup by pre-computed Hebrew date parts, so callers rendering a whole year
+// can reuse one Intl formatter instead of constructing one per day.
+export function holidaysForHebrewDate(day: number, month: string): { jewish: HolidayLabel | null; israeli: HolidayLabel | null } {
+  let jewish: HolidayLabel | null = null;
+  if (month === "Kislev" && day >= 25) jewish = { en: "Hanukkah", he: "חנוכה" };
+  else if (month === "Tevet" && day <= 2) jewish = { en: "Hanukkah", he: "חנוכה" };
+  else jewish = fixedHolidays[`${month}-${day}`] || null;
+  return { jewish, israeli: israeliHolidays[`${month}-${day}`] || null };
+}
+
 export function dateOnly(value: Date) {
   const year = value.getUTCFullYear();
   const month = String(value.getUTCMonth() + 1).padStart(2, "0");

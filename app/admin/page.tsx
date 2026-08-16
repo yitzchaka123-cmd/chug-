@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { holidaysForHebrewDate, recurringDates } from "@/lib/calendar";
 import { choirConfig } from "../site-config";
 
 type Tab = "dashboard" | "students" | "groups" | "calendar" | "payments" | "years" | "agreements" | "documents" | "creative" | "history" | "settings";
@@ -11,7 +12,7 @@ type Group = { id: string; name: string; ageMin: number | null; ageMax: number |
 type Unassigned = { enrollmentId: string; name: string; birthDate: string | null };
 type PaymentMethod = { id: string; code: string; label: string; instructions: string; proofPolicy: "required" | "optional" | "none"; cashHandling: boolean; enabled: boolean; isDefault: boolean; sortOrder: number };
 type CustomLink = { id: string; label: string; groupName: string | null; monthlyFee: number | null; registrationFee: number | null; juneFee: number | null; oneTimeAmount: number | null; status: string; useCount: number; maxUses: number | null; expiresAt: string | null; url: string };
-type ScheduleEvent = { id: string; group_id: string | null; group_name?: string | null; title_en: string; title_he?: string | null; starts_at: string; ends_at?: string | null; location?: string | null; note?: string | null; status: string; kind: string };
+type ScheduleEvent = { id: string; group_id: string | null; group_name?: string | null; title_en: string; title_he?: string | null; starts_at: string; ends_at?: string | null; location?: string | null; note?: string | null; status: string; kind: string; source?: string };
 type ScheduleVersion = { id: string; version: number; name: string; status: string; finalized_at: string };
 type CareDetail = { emergencyContactName?: string; emergencyContactPhone?: string; emergencyContactRelation?: string; allergies?: string; medicalInformation?: string; medications?: string; additionalNote?: string | null; emergencyName?: string; emergencyPhone?: string; emergencyRelation?: string; medical?: string };
 type Detail = { registration: { id: string; name: string; parents: { fatherName?: string; fatherPhone?: string; motherName?: string; motherPhone?: string; email?: string }; paymentMethod?: string; reviewStatus: string; proofStatus: string; studentStatus?: string; enrollmentId?: string; groupId?: string; privateNotes: string; care?: CareDetail | null }; payments: Array<{ id: string; periodKey: string; label: string; amountDue: number; amountPaid: number; status: string; paid: boolean; method?: string }>; history: Array<{ id: number; summary?: string; action: string; created_at: string }> };
@@ -124,7 +125,7 @@ export default function AdminSystem() {
       {tab === "dashboard" && <Dashboard metrics={metrics} birthdays={birthdays} setTab={setTab} year={activeYear} />}
       {tab === "students" && <StudentsPanel students={filteredStudents} search={search} setSearch={setSearch} selected={selected} setSelected={setSelected} yearId={yearId} setAddOpen={setAddOpen} />}
       {tab === "groups" && <GroupsPanel groups={groups} unassigned={unassigned} yearId={yearId} mutate={mutate} reload={reload} toast={setToast} />}
-      {tab === "calendar" && <CalendarPanel events={events} versions={versions} groups={groups} yearId={yearId} mutate={mutate} reload={reload} toast={setToast} />}
+      {tab === "calendar" && <CalendarPanel events={events} versions={versions} groups={groups} yearId={yearId} year={activeYear} mutate={mutate} reload={reload} toast={setToast} />}
       {tab === "payments" && <PaymentsPanel methods={methods} links={customLinks} groups={groups} yearId={yearId} year={activeYear} mutate={mutate} reload={reload} toast={setToast} />}
       {tab === "years" && <YearsPanel key={activeYear?.id || "year"} years={years} activeYear={activeYear} setYearId={setYearId} refreshYears={refreshYears} mutate={mutate} toast={setToast} />}
       {tab === "agreements" && <AgreementsPanel yearId={yearId} year={activeYear} mutate={mutate} toast={setToast} />}
@@ -189,14 +190,179 @@ function GroupsPanel({ groups, unassigned, yearId, mutate, reload, toast }: { gr
   return <div className="admin-page-stack"><section className="admin-card admin-form-card"><div className="admin-card-head"><div><p className="eyebrow">Groups</p><h2>Create a group</h2></div><p>Each group receives its own private live schedule link.</p></div><div className="compact-form-grid"><label><span>Group name</span><input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></label><label><span>Day</span><select value={form.weekday} onChange={(event) => setForm({ ...form, weekday: event.target.value })}>{weekdayNames.map((day, index) => <option key={day} value={index}>{day}</option>)}</select></label><label><span>Start</span><input type="time" value={form.startTime} onChange={(event) => setForm({ ...form, startTime: event.target.value })} /></label><label><span>End</span><input type="time" value={form.endTime} onChange={(event) => setForm({ ...form, endTime: event.target.value })} /></label><label><span>Location</span><input value={form.location} onChange={(event) => setForm({ ...form, location: event.target.value })} /></label><label><span>Min age</span><input type="number" value={form.ageMin} onChange={(event) => setForm({ ...form, ageMin: event.target.value })} /></label><label><span>Max age</span><input type="number" value={form.ageMax} onChange={(event) => setForm({ ...form, ageMax: event.target.value })} /></label><button className="admin-primary" onClick={() => void create()}>Create group</button></div></section><section className="admin-grid-cards">{groups.map((group) => <article className="admin-card group-card" key={group.id}><div className="group-card-title"><div><span className="status-dot" /> <strong>{group.name}</strong><small>{group.memberCount} students</small></div><span className="status-chip status-approved">{group.status}</span></div><dl className="card-details"><div><dt>Time</dt><dd>{weekdayNames[group.weekday] || "Wednesday"} {group.startTime || "TBD"}{group.endTime ? `–${group.endTime}` : ""}</dd></div><div><dt>Length</dt><dd>{group.sessionLengthMinutes} minutes</dd></div><div><dt>Location</dt><dd>{group.location || "To be set"}</dd></div><div><dt>Ages</dt><dd>{group.ageMin || "—"}–{group.ageMax || "—"}</dd></div></dl>{group.announcementBody && <div className="live-update-card"><strong>{group.announcementTitle}</strong><p>{group.announcementBody}</p></div>}<div className="card-actions"><button onClick={() => void updateAnnouncement(group)}>Live update</button><button onClick={() => setWhatsAppGroup(group)}>WhatsApp update</button><button onClick={() => { void navigator.clipboard.writeText(group.scheduleUrl); toast("Private schedule link copied."); }}>Copy parent link</button><a href={group.scheduleUrl} target="_blank" rel="noreferrer">Open</a><button onClick={async () => { if (!window.confirm("Reset this private link? The old link will stop working.")) return; try { const result = await mutate<{ scheduleUrl: string }>("/api/admin/groups", { id: group.id, action: "rotate-link" }, "PATCH"); await navigator.clipboard.writeText(result.scheduleUrl); await reload("Private link reset and copied."); } catch (error) { toast(error instanceof Error ? error.message : "Link could not be reset."); } }}>Reset link</button><button onClick={() => void removeGroup(group)}>Delete</button></div></article>)}{groups.length === 0 && <div className="admin-empty-state"><strong>No groups yet</strong><p>Create groups once you know how registrations should be arranged.</p></div>}</section>{unassigned.length > 0 && <section className="admin-card"><div className="admin-card-head"><div><p className="eyebrow">Placement</p><h2>Unassigned students</h2></div></div><div className="assignment-list">{unassigned.map((student) => <div key={student.enrollmentId}><span><strong>{student.name}</strong><small>{student.birthDate || "Birth date not entered"}</small></span><select defaultValue="" onChange={async (event) => { if (!event.target.value) return; try { await mutate("/api/admin/groups", { action: "assign", enrollmentId: student.enrollmentId, groupId: event.target.value }, "PATCH"); await reload(`${student.name} assigned.`); } catch (error) { toast(error instanceof Error ? error.message : "Assignment failed."); } }}><option value="">Assign to…</option>{groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}</select></div>)}</div></section>}{whatsAppGroup && <WhatsAppModal title={`${whatsAppGroup.name} parents`} phone="" templates={groupTemplates(whatsAppGroup)} close={() => setWhatsAppGroup(null)} toast={toast} />}</div>;
 }
 
-function CalendarPanel({ events, versions, groups, yearId, mutate, reload, toast }: { events: ScheduleEvent[]; versions: ScheduleVersion[]; groups: Group[]; yearId: string; mutate: <T>(url: string, body: Record<string, unknown>, method?: string) => Promise<T>; reload: (message?: string) => Promise<void>; toast: (message: string) => void }) {
+function CalendarPanel({ events, versions, groups, yearId, year, mutate, reload, toast }: { events: ScheduleEvent[]; versions: ScheduleVersion[]; groups: Group[]; yearId: string; year?: Year; mutate: <T>(url: string, body: Record<string, unknown>, method?: string) => Promise<T>; reload: (message?: string) => Promise<void>; toast: (message: string) => void }) {
   const [form, setForm] = useState({ groupId: "", date: "", startTime: "17:00", endTime: "17:50", titleEn: "Choir session", titleHe: "", location: "", note: "" });
-  const [generateGroupId, setGenerateGroupId] = useState("");
-  async function run(action: string) { try { const result = await mutate<{ count?: number; generated?: number; version?: number }>("/api/admin/schedule", { action, yearId, ...(generateGroupId && (action === "preview" || action === "generate") ? { groupIds: [generateGroupId] } : {}) }); if (action === "preview") toast(`${result.count || 0} recurring sessions are ready to generate.`); else await reload(action === "generate" ? `${result.generated || 0} sessions generated without overwriting manual changes.` : `Schedule version ${result.version || ""} finalized.`); } catch (error) { toast(error instanceof Error ? error.message : "Schedule action failed."); } }
+  const [planGroupId, setPlanGroupId] = useState("");
+  const [planWeekday, setPlanWeekday] = useState(3);
+  const [selectedDates, setSelectedDates] = useState<Set<string>>(new Set());
+  const [showHolidaysEn, setShowHolidaysEn] = useState(true);
+  const [showHolidaysHe, setShowHolidaysHe] = useState(true);
+  const [showHolidaysIl, setShowHolidaysIl] = useState(true);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [savingPlan, setSavingPlan] = useState(false);
+  const [update, setUpdate] = useState({ title: "", body: "" });
+  const initializedFor = useRef("");
+
+  const effectivePlanGroupId = planGroupId || groups[0]?.id || "";
+  const planGroup = groups.find((group) => group.id === effectivePlanGroupId);
+
+  const monthGrids = useMemo(() => {
+    if (!year) return [];
+    const partsFormatter = new Intl.DateTimeFormat("en-u-ca-hebrew", { day: "numeric", month: "long", timeZone: "Asia/Jerusalem" });
+    const hebrewFormatter = new Intl.DateTimeFormat("he-u-ca-hebrew", { day: "numeric", month: "long", timeZone: "Asia/Jerusalem" });
+    return scheduleMonths(year.startsOn, year.endsOn).map((month) => {
+      const first = new Date(`${month.key}-01T12:00:00Z`);
+      const dayCount = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0)).getUTCDate();
+      const days = [];
+      for (let dayNumber = 1; dayNumber <= dayCount; dayNumber += 1) {
+        const date = `${month.key}-${String(dayNumber).padStart(2, "0")}`;
+        const moment = new Date(`${date}T12:00:00+03:00`);
+        const parts = partsFormatter.formatToParts(moment);
+        const hebrewDay = Number(parts.find((part) => part.type === "day")?.value || 0);
+        const hebrewMonth = parts.find((part) => part.type === "month")?.value || "";
+        days.push({ date, day: dayNumber, hebrew: hebrewFormatter.format(moment), ...holidaysForHebrewDate(hebrewDay, hebrewMonth) });
+      }
+      return { key: month.key, label: month.label, lead: first.getUTCDay(), days };
+    });
+  }, [year]);
+  const dayLookup = useMemo(() => new Map(monthGrids.flatMap((month) => month.days.map((day) => [day.date, day] as const))), [monthGrids]);
+  const seedDates = useMemo(() => new Set(year ? recurringDates(year.startsOn, year.endsOn, planWeekday) : []), [year, planWeekday]);
+  const orderedDates = useMemo(() => [...selectedDates].sort(), [selectedDates]);
+
+  useEffect(() => {
+    if (!effectivePlanGroupId || !year || initializedFor.current === effectivePlanGroupId) return;
+    initializedFor.current = effectivePlanGroupId;
+    const group = groups.find((item) => item.id === effectivePlanGroupId);
+    const weekday = group?.weekday ?? 3;
+    setPlanWeekday(weekday);
+    const saved = events.filter((event) => event.group_id === effectivePlanGroupId && (event.source === "planned" || event.source === "recurring")).map((event) => event.starts_at.slice(0, 10));
+    setSelectedDates(new Set(saved.length ? saved : recurringDates(year.startsOn, year.endsOn, weekday)));
+    setUpdate({ title: group?.announcementTitle || "", body: group?.announcementBody || "" });
+  }, [effectivePlanGroupId, groups, events, year]);
+
+  function reseed(weekday: number) {
+    setPlanWeekday(weekday);
+    if (year) setSelectedDates(new Set(recurringDates(year.startsOn, year.endsOn, weekday)));
+  }
+  function toggleDate(date: string) {
+    setSelectedDates((current) => { const next = new Set(current); if (next.has(date)) next.delete(date); else next.add(date); return next; });
+  }
+  function holidayText(label: { en: string; he: string }) {
+    return [showHolidaysEn ? label.en : null, showHolidaysHe ? label.he : null].filter(Boolean).join(" · ");
+  }
+  function previewHoliday(date: string) {
+    const info = dayLookup.get(date);
+    return [info?.jewish?.en, showHolidaysIl ? info?.israeli?.en : null].filter(Boolean).join(" / ");
+  }
+
+  async function savePlan() {
+    if (!effectivePlanGroupId || savingPlan) return;
+    setSavingPlan(true);
+    try {
+      const result = await mutate<{ count: number }>("/api/admin/schedule", { action: "apply-plan", yearId, groupId: effectivePlanGroupId, dates: orderedDates });
+      setPreviewOpen(false);
+      await reload(`${result.count} sessions saved. ${planGroup?.name || "The group"}'s parent calendar is updated live.`);
+    } catch (error) { toast(error instanceof Error ? error.message : "The calendar plan could not be saved."); } finally { setSavingPlan(false); }
+  }
+  function exportCsv() {
+    const rows = [["Session", "Date", "Weekday", "Hebrew date", "Holiday", "Start", "End", "Group"]];
+    orderedDates.forEach((date, index) => {
+      const info = dayLookup.get(date);
+      rows.push([String(index + 1), date, weekdayNames[new Date(`${date}T12:00:00Z`).getUTCDay()] || "", info?.hebrew || "", previewHoliday(date), planGroup?.startTime || "", planGroup?.endTime || "", planGroup?.name || ""]);
+    });
+    const csv = rows.map((row) => row.map((cell) => `"${cell.replaceAll('"', '""')}"`).join(",")).join("\r\n");
+    downloadBlob(new Blob([`﻿${csv}`], { type: "text/csv;charset=utf-8" }), `${(planGroup?.name || "choir").replaceAll(/[^\p{L}\p{N}]+/gu, "-")}-schedule.csv`);
+  }
+  function printPlan() {
+    const win = window.open("", "_blank");
+    if (!win) { toast("Allow pop-ups to print the plan."); return; }
+    const escapeHtml = (value: string) => value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+    const rows = orderedDates.map((date, index) => {
+      const info = dayLookup.get(date);
+      return `<tr><td>${index + 1}</td><td>${date}</td><td>${escapeHtml(weekdayNames[new Date(`${date}T12:00:00Z`).getUTCDay()] || "")}</td><td>${escapeHtml(info?.hebrew || "")}</td><td>${escapeHtml(previewHoliday(date))}</td><td>${escapeHtml(planGroup?.startTime || "")}${planGroup?.endTime ? `–${escapeHtml(planGroup.endTime)}` : ""}</td></tr>`;
+    }).join("");
+    win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(planGroup?.name || "Choir")} schedule</title><style>body{font-family:Georgia,serif;margin:32px}h1{font-size:1.3rem}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ccc;padding:6px 8px;font-size:.85rem;text-align:left}th{background:#f6ecee}</style></head><body><h1>${escapeHtml(planGroup?.name || "Choir")} · ${escapeHtml(year?.name || "")} · ${orderedDates.length} sessions</h1><table><thead><tr><th>#</th><th>Date</th><th>Day</th><th>Hebrew date</th><th>Holiday</th><th>Time</th></tr></thead><tbody>${rows}</tbody></table></body></html>`);
+    win.document.close();
+    win.focus();
+    win.print();
+  }
+  async function publishUpdate(clear = false) {
+    if (!effectivePlanGroupId) return;
+    try {
+      await mutate("/api/admin/groups", { id: effectivePlanGroupId, announcementTitle: clear ? "" : update.title, announcementBody: clear ? "" : update.body }, "PATCH");
+      if (clear) setUpdate({ title: "", body: "" });
+      await reload(clear ? "Special update removed from the parent page." : "Special update published. Parents see it immediately.");
+    } catch (error) { toast(error instanceof Error ? error.message : "The update could not be published."); }
+  }
+  async function finalize() {
+    try {
+      const result = await mutate<{ version?: number }>("/api/admin/schedule", { action: "finalize", yearId });
+      await reload(`Schedule version ${result.version || ""} finalized.`);
+    } catch (error) { toast(error instanceof Error ? error.message : "Schedule could not be finalized."); }
+  }
   async function addEvent() { try { await mutate("/api/admin/schedule", { ...form, yearId }); setForm({ ...form, date: "", note: "" }); await reload("Calendar event added and visible to the selected group."); } catch (error) { toast(error instanceof Error ? error.message : "Event could not be added."); } }
   async function setEventStatus(event: ScheduleEvent, status: "cancelled" | "scheduled") { if (status === "cancelled" && !window.confirm(`Mark "${event.title_en}" as cancelled? Parents will see it as cancelled on their live schedule.`)) return; try { await mutate("/api/admin/schedule", { id: event.id, status }, "PATCH"); await reload(status === "cancelled" ? "Session cancelled. The parent schedule shows it live." : "Session restored to the schedule."); } catch (error) { toast(error instanceof Error ? error.message : "Session status could not be changed."); } }
   async function removeEvent(event: ScheduleEvent) { if (!window.confirm(`Delete "${event.title_en}" from the calendar? This removes it from parent schedules entirely — cancelling keeps a visible record instead.`)) return; try { await readJson(`/api/admin/schedule?id=${encodeURIComponent(event.id)}`, { method: "DELETE" }); await reload("Calendar entry deleted."); } catch (error) { toast(error instanceof Error ? error.message : "Calendar entry could not be deleted."); } }
-  return <div className="admin-page-stack"><section className="admin-card schedule-toolbar"><div><p className="eyebrow">Schedule builder</p><h2>Generate, adjust, finalize and print</h2><p>Recurring sessions use the selected year and each group’s Wednesday time. Manual notes are preserved.</p></div><div><label className="group-filter"><span>Scope</span><select value={generateGroupId} onChange={(event) => setGenerateGroupId(event.target.value)}><option value="">All groups</option>{groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}</select></label><button className="secondary-button" onClick={() => void run("preview")}>Preview recurring dates</button><button className="secondary-button" onClick={() => void run("generate")}>Generate sessions</button><button className="admin-primary" onClick={() => void run("finalize")}>Finalize schedule</button><a className="secondary-button admin-link-button" href={`/api/admin/documents?kind=schedule&yearId=${encodeURIComponent(yearId)}`} download>Print schedule</a></div></section><section className="admin-card admin-form-card"><div className="admin-card-head"><div><p className="eyebrow">One-off update</p><h2>Add a session or note</h2></div></div><div className="compact-form-grid calendar-form"><label><span>Group</span><select value={form.groupId} onChange={(event) => setForm({ ...form, groupId: event.target.value })}><option value="">All groups</option>{groups.map((group) => <option value={group.id} key={group.id}>{group.name}</option>)}</select></label><label><span>Date</span><input type="date" value={form.date} onChange={(event) => setForm({ ...form, date: event.target.value })} /></label><label><span>Start</span><input type="time" value={form.startTime} onChange={(event) => setForm({ ...form, startTime: event.target.value })} /></label><label><span>End</span><input type="time" value={form.endTime} onChange={(event) => setForm({ ...form, endTime: event.target.value })} /></label><label><span>English title</span><input value={form.titleEn} onChange={(event) => setForm({ ...form, titleEn: event.target.value })} /></label><label><span>Hebrew title</span><input dir="rtl" value={form.titleHe} onChange={(event) => setForm({ ...form, titleHe: event.target.value })} /></label><label className="wide"><span>Note shown on the calendar day</span><textarea value={form.note} onChange={(event) => setForm({ ...form, note: event.target.value })} /></label><button className="admin-primary" onClick={() => void addEvent()}>Add to calendar</button></div></section><section className="admin-card"><div className="admin-card-head"><div><p className="eyebrow">Live calendar</p><h2>{events.length} scheduled entries</h2></div>{versions[0] && <span className="status-chip status-approved">Finalized v{versions[0].version}</span>}</div><div className="schedule-event-list">{events.slice(0, 120).map((event) => <article key={event.id}><time>{new Date(event.starts_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}<small>{event.starts_at.slice(11, 16)}</small></time><div><strong>{event.title_en}{event.title_he ? ` · ${event.title_he}` : ""}</strong><span>{[event.group_name, event.location, event.status === "cancelled" ? "Cancelled" : event.status].filter(Boolean).join(" · ")}</span>{event.note && <p>{event.note}</p>}</div><button onClick={async () => { const note = window.prompt("Edit the note shown to parents", event.note || ""); if (note === null) return; try { await mutate("/api/admin/schedule", { id: event.id, note }, "PATCH"); await reload("Calendar note updated live."); } catch (error) { toast(error instanceof Error ? error.message : "Note could not be updated."); } }}>Edit note</button>{event.status === "cancelled" ? <button onClick={() => void setEventStatus(event, "scheduled")}>Restore</button> : <button onClick={() => void setEventStatus(event, "cancelled")}>Cancel session</button>}<button onClick={() => void removeEvent(event)}>Delete</button></article>)}{events.length === 0 && <div className="admin-empty-state"><strong>No schedule entries yet</strong><p>Preview and generate the recurring schedule, or add an event manually.</p></div>}</div></section></div>;
+
+  return <div className="admin-page-stack">
+    <section className="admin-card schedule-toolbar">
+      <div><p className="eyebrow">Schedule builder</p><h2>Plan the whole year on the calendar</h2><p>Pick a group and its weekday — every matching date turns green. Tap any day to remove it (it shows red) or to add an extra date, then preview, print, export and save.</p></div>
+      <div><button className="admin-primary" disabled={!effectivePlanGroupId} onClick={() => setPreviewOpen(true)}>Preview & save · {orderedDates.length} dates</button><button className="secondary-button" onClick={() => void finalize()}>Finalize schedule</button><a className="secondary-button admin-link-button" href={`/api/admin/documents?kind=schedule&yearId=${encodeURIComponent(yearId)}${effectivePlanGroupId ? `&groupId=${encodeURIComponent(effectivePlanGroupId)}` : ""}`} download>Print saved schedule</a></div>
+    </section>
+    <section className="admin-card plan-builder">
+      <div className="plan-controls">
+        <label><span>Group</span><select value={effectivePlanGroupId} onChange={(event) => setPlanGroupId(event.target.value)}>{groups.length === 0 && <option value="">Create a group first</option>}{groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}</select></label>
+        <label><span>Weekday</span><select value={planWeekday} onChange={(event) => reseed(Number(event.target.value))}>{weekdayNames.map((day, index) => <option key={day} value={index}>{day}</option>)}</select></label>
+        <button className="secondary-button" onClick={() => reseed(planWeekday)}>Reset to every {weekdayNames[planWeekday]}</button>
+      </div>
+      <div className="plan-toggles">
+        <label><input type="checkbox" checked={showHolidaysEn} onChange={(event) => setShowHolidaysEn(event.target.checked)} /><span>English holiday names</span></label>
+        <label><input type="checkbox" checked={showHolidaysHe} onChange={(event) => setShowHolidaysHe(event.target.checked)} /><span>Hebrew holiday names</span></label>
+        <label><input type="checkbox" checked={showHolidaysIl} onChange={(event) => setShowHolidaysIl(event.target.checked)} /><span>Israeli national holidays</span></label>
+      </div>
+      <div className="plan-legend"><span className="legend-on">Scheduled session</span><span className="legend-off">Skipped {weekdayNames[planWeekday]}</span><span className="legend-holiday">Holiday</span></div>
+      <div className="plan-months">{monthGrids.map((month) => <article className="plan-month" key={month.key}>
+        <h3>{month.label}</h3>
+        <div className="plan-grid">
+          {["S", "M", "T", "W", "T", "F", "S"].map((day, index) => <span className="plan-grid-head" key={`${month.key}-head-${index}`}>{day}</span>)}
+          {Array.from({ length: month.lead }, (_, index) => <span className="plan-blank" key={`${month.key}-blank-${index}`} />)}
+          {month.days.map((day) => {
+            const on = selectedDates.has(day.date);
+            const off = !on && seedDates.has(day.date);
+            const labels = [day.jewish ? holidayText(day.jewish) : "", showHolidaysIl && day.israeli ? holidayText(day.israeli) : ""].filter(Boolean);
+            return <button type="button" key={day.date} className={`plan-day${on ? " plan-on" : ""}${off ? " plan-off" : ""}`} aria-pressed={on} onClick={() => toggleDate(day.date)}>
+              <strong>{day.day}</strong>
+              <small className="plan-hebrew">{day.hebrew}</small>
+              {labels.map((label, index) => <small className="plan-holiday" key={`${day.date}-holiday-${index}`}>{label}</small>)}
+            </button>;
+          })}
+        </div>
+      </article>)}</div>
+      {monthGrids.length === 0 && <p className="admin-muted">Select a school year with start and end dates to plan the calendar.</p>}
+    </section>
+    {planGroup && <section className="admin-card admin-form-card">
+      <div className="admin-card-head"><div><p className="eyebrow">Parent page</p><h2>Special update for {planGroup.name}</h2></div><p>Shown at the top of the group’s private schedule page the moment you publish it.</p></div>
+      <div className="compact-form-grid">
+        <label><span>Heading</span><input value={update.title} onChange={(event) => setUpdate({ ...update, title: event.target.value })} placeholder="Schedule update" /></label>
+        <label className="wide"><span>Message parents see</span><textarea value={update.body} onChange={(event) => setUpdate({ ...update, body: event.target.value })} placeholder="For example: this Wednesday’s session ends 10 minutes early." /></label>
+        <button className="admin-primary" onClick={() => void publishUpdate(false)}>Publish update</button>
+        {(planGroup.announcementTitle || planGroup.announcementBody) && <button className="secondary-button" onClick={() => void publishUpdate(true)}>Remove current update</button>}
+      </div>
+    </section>}
+    <section className="admin-card admin-form-card"><div className="admin-card-head"><div><p className="eyebrow">One-off update</p><h2>Add a session or note</h2></div></div><div className="compact-form-grid calendar-form"><label><span>Group</span><select value={form.groupId} onChange={(event) => setForm({ ...form, groupId: event.target.value })}><option value="">All groups</option>{groups.map((group) => <option value={group.id} key={group.id}>{group.name}</option>)}</select></label><label><span>Date</span><input type="date" value={form.date} onChange={(event) => setForm({ ...form, date: event.target.value })} /></label><label><span>Start</span><input type="time" value={form.startTime} onChange={(event) => setForm({ ...form, startTime: event.target.value })} /></label><label><span>End</span><input type="time" value={form.endTime} onChange={(event) => setForm({ ...form, endTime: event.target.value })} /></label><label><span>English title</span><input value={form.titleEn} onChange={(event) => setForm({ ...form, titleEn: event.target.value })} /></label><label><span>Hebrew title</span><input dir="rtl" value={form.titleHe} onChange={(event) => setForm({ ...form, titleHe: event.target.value })} /></label><label className="wide"><span>Note shown on the calendar day</span><textarea value={form.note} onChange={(event) => setForm({ ...form, note: event.target.value })} /></label><button className="admin-primary" onClick={() => void addEvent()}>Add to calendar</button></div></section>
+    <section className="admin-card"><div className="admin-card-head"><div><p className="eyebrow">Live calendar</p><h2>{events.length} scheduled entries</h2></div>{versions[0] && <span className="status-chip status-approved">Finalized v{versions[0].version}</span>}</div><div className="schedule-event-list">{events.slice(0, 120).map((event) => <article key={event.id}><time>{new Date(event.starts_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}<small>{event.starts_at.slice(11, 16)}</small></time><div><strong>{event.title_en}{event.title_he ? ` · ${event.title_he}` : ""}</strong><span>{[event.group_name, event.location, event.status === "cancelled" ? "Cancelled" : event.status].filter(Boolean).join(" · ")}</span>{event.note && <p>{event.note}</p>}</div><button onClick={async () => { const note = window.prompt("Edit the note shown to parents", event.note || ""); if (note === null) return; try { await mutate("/api/admin/schedule", { id: event.id, note }, "PATCH"); await reload("Calendar note updated live."); } catch (error) { toast(error instanceof Error ? error.message : "Note could not be updated."); } }}>Edit note</button>{event.status === "cancelled" ? <button onClick={() => void setEventStatus(event, "scheduled")}>Restore</button> : <button onClick={() => void setEventStatus(event, "cancelled")}>Cancel session</button>}<button onClick={() => void removeEvent(event)}>Delete</button></article>)}{events.length === 0 && <div className="admin-empty-state"><strong>No schedule entries yet</strong><p>Plan the year above, or add an event manually.</p></div>}</div></section>
+    {previewOpen && <Modal close={() => setPreviewOpen(false)}>
+      <p className="eyebrow">Calendar plan</p>
+      <h2>{planGroup?.name || "Group"} · {orderedDates.length} sessions</h2>
+      <div className="plan-preview-list">{orderedDates.map((date, index) => {
+        const info = dayLookup.get(date);
+        const holiday = previewHoliday(date);
+        return <div key={date}><span>{index + 1}</span><div><strong>{weekdayNames[new Date(`${date}T12:00:00Z`).getUTCDay()]} {new Date(`${date}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" })}</strong><small>{info?.hebrew}{holiday ? ` · ${holiday}` : ""}</small></div></div>;
+      })}{orderedDates.length === 0 && <p className="admin-muted">No dates are selected yet.</p>}</div>
+      <div className="card-actions"><button className="secondary-button" onClick={printPlan}>Print</button><button className="secondary-button" onClick={exportCsv}>Export to Excel</button><button className="admin-primary" disabled={savingPlan || orderedDates.length === 0} onClick={() => void savePlan()}>{savingPlan ? "Saving…" : "Save to live calendar"}</button></div>
+      <p className="admin-muted">Saving replaces {planGroup?.name || "the group"}’s planned sessions with these dates. Manually added or edited entries are kept, and the parent page updates immediately.</p>
+    </Modal>}
+  </div>;
 }
 
 function scheduleMonths(startsOn?: string, endsOn?: string) {

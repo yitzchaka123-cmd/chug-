@@ -81,6 +81,33 @@ export async function POST(request: Request) {
       for (let offset = 0; offset < statements.length; offset += 80) await runtime.DB.batch(statements.slice(offset, offset + 80));
       return Response.json({ saved: true, generated: plan.length }, { headers: { "Cache-Control": "no-store" } });
     }
+    if (action === "apply-plan") {
+      const groupId = value(body.groupId, 80);
+      if (!groupId) return Response.json({ error: "Choose a group before saving the calendar plan." }, { status: 400 });
+      const group = await runtime.DB.prepare(`SELECT id, name, school_year_id, start_time, end_time, session_length_minutes, location FROM groups WHERE id = ? AND school_year_id = ? LIMIT 1`).bind(groupId, yearId).first<{ id: string; name: string; school_year_id: string; start_time: string | null; end_time: string | null; session_length_minutes: number; location: string | null }>();
+      if (!group) return Response.json({ error: "The group could not be found for this school year." }, { status: 404 });
+      const dates = Array.isArray(body.dates) ? [...new Set(body.dates.filter((item): item is string => typeof item === "string" && /^\d{4}-\d{2}-\d{2}$/.test(item)))].sort().slice(0, 400) : [];
+      const settings = await ensureCurrentRegistrationConfig(runtime.DB, yearId);
+      const startTime = group.start_time || settings.scheduleStartTime;
+      let endTime = group.end_time || "";
+      if (!endTime) {
+        const [hour, minute] = startTime.split(":").map(Number);
+        const endMinutes = hour * 60 + minute + group.session_length_minutes;
+        endTime = `${String(Math.floor(endMinutes / 60)).padStart(2, "0")}:${String(endMinutes % 60).padStart(2, "0")}`;
+      }
+      const statements: D1PreparedStatement[] = [
+        runtime.DB.prepare(`DELETE FROM schedule_events WHERE school_year_id = ? AND group_id = ? AND source IN ('recurring', 'planned')`).bind(yearId, groupId),
+      ];
+      for (const date of dates) {
+        statements.push(runtime.DB.prepare(`
+          INSERT INTO schedule_events (id, school_year_id, group_id, kind, title_en, starts_at, ends_at, location, status, source, source_key, created_by, created_at, updated_at)
+          VALUES (?, ?, ?, 'session', 'Choir session', ?, ?, ?, 'scheduled', 'planned', ?, ?, ?, ?)
+        `).bind(crypto.randomUUID(), yearId, groupId, combineLocalDateTime(date, startTime), combineLocalDateTime(date, endTime), group.location || settings.location, `${groupId}:${date}`, admin.id, now, now));
+      }
+      statements.push(runtime.DB.prepare(`INSERT INTO audit_log (school_year_id, actor_type, actor_id, action, entity_type, entity_id, summary, changes_json, created_at) VALUES (?, 'admin', ?, 'schedule.plan_applied', 'group', ?, 'Calendar plan saved', ?, ?)`).bind(yearId, admin.id, groupId, JSON.stringify({ group: group.name, sessions: dates.length }), now));
+      for (let offset = 0; offset < statements.length; offset += 80) await runtime.DB.batch(statements.slice(offset, offset + 80));
+      return Response.json({ saved: true, count: dates.length }, { headers: { "Cache-Control": "no-store" } });
+    }
     if (action === "finalize") {
       const events = await runtime.DB.prepare(`SELECT se.*, g.name AS group_name FROM schedule_events se LEFT JOIN groups g ON g.id = se.group_id WHERE se.school_year_id = ? ORDER BY se.starts_at, g.name`).bind(yearId).all<Record<string, unknown>>();
       const last = await runtime.DB.prepare(`SELECT MAX(version) AS version FROM schedule_versions WHERE school_year_id = ?`).bind(yearId).first<{ version: number | null }>();

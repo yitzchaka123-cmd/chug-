@@ -151,6 +151,11 @@ test("registration, custom pricing, schedules, PDFs, admin data and backups work
     const parentSchedule = await json(await request(parentSchedulePath));
     assert.equal(parentSchedule.group.name, "Test Group");
 
+    const plan = await json(await request("/api/admin/schedule", { method: "POST", headers: adminHeaders, body: JSON.stringify({ action: "apply-plan", yearId, groupId: group.id, dates: ["2026-09-02", "2026-09-09", "2026-09-16"] }) }));
+    assert.equal(plan.count, 3);
+    const planEvents = await json(await request(`/api/admin/schedule?yearId=${encodeURIComponent(yearId)}`, { headers: adminHeaders }));
+    assert.equal(planEvents.events.filter((event) => event.source === "planned").length, 3, "the calendar plan must create planned sessions for the chosen dates");
+
     const generated = await json(await request("/api/admin/schedule", { method: "POST", headers: adminHeaders, body: JSON.stringify({ action: "generate", yearId }) }));
     assert.ok(generated.generated > 20);
     const finalized = await json(await request("/api/admin/schedule", { method: "POST", headers: adminHeaders, body: JSON.stringify({ action: "finalize", yearId, name: "Test final schedule" }) }));
