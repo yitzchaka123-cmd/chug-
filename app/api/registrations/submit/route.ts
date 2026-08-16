@@ -173,10 +173,10 @@ export async function POST(request: Request) {
     const proofEntry = formData.get("proof");
     const proofFile = proofEntry instanceof File && proofEntry.size > 0 ? proofEntry : null;
     const isCashMethod = methodRecord?.cashHandling === true;
-    if (isCashMethod && proofFile) return jsonError("Cash registrations do not need a payment screenshot.");
+    if (isCashMethod && proofFile) return jsonError("Cash registrations do not need a screenshot of the registration fee.");
     const proofPolicy = offer?.proofPolicy || methodRecord?.proofPolicy || (settings.proofUploadRequired ? "required" : "optional");
-    if (proofPolicy === "none" && proofFile) return jsonError("This payment method does not accept a payment screenshot.");
-    if (proofPolicy === "required" && !isCashMethod && !proofFile) return jsonError("A payment screenshot is required for this payment method.");
+    if (proofPolicy === "none" && proofFile) return jsonError("This payment method does not accept a screenshot.");
+    if (proofPolicy === "required" && !isCashMethod && !proofFile) return jsonError("Please add a screenshot of your registration fee payment.");
     const proof = proofFile ? await validatePaymentProofImage(proofFile, proofFile.name) : null;
 
     const registrationId = crypto.randomUUID();

@@ -500,7 +500,7 @@ export default function RegistrationPreview() {
 
           {step === 3 && (
             <div className="form-section">
-              <div className="form-section-title"><span>04</span><div><h2>Payment information</h2><p>Choose a method and add payment proof where applicable.</p></div></div>
+              <div className="form-section-title"><span>04</span><div><h2>Payment information</h2><p>Choose how you’ll pay, then add a screenshot of the registration fee where it applies.</p></div></div>
               {payment.registrationFeeAmount > 0 && <div className="payment-total registration-payment"><span>Registration fee, due now</span><strong><bdi dir="ltr">₪{payment.registrationFeeAmount.toLocaleString("en-US")}</bdi></strong><small>One time, secures her place. Separate from the monthly fees.</small></div>}
               <div className="payment-total monthly-payment"><span>Monthly choir payment</span><strong><bdi dir="ltr">₪{payment.monthlyAmount.toLocaleString("en-US")}</bdi><em>/month</em></strong><small>September–May · June is <bdi dir="ltr">₪{payment.juneAmount.toLocaleString("en-US")}</bdi></small></div>
               <div className="payment-methods">
@@ -509,8 +509,8 @@ export default function RegistrationPreview() {
               {selectedMethod?.instructions && <p className="payment-method-note"><strong>{selectedMethod.label}:</strong> {selectedMethod.instructions}</p>}
               {paymentAllowsProof && (
                 <>
-                  <div className="upload-title"><span>Registration fee payment proof</span><small>{paymentRequiresProof ? "Required" : "Optional"} for {form.method}</small></div>
-                  <label className={proofPreview ? "upload-box has-preview" : "upload-box"}><input type="file" accept="image/*" onChange={chooseProof} />{proofPreview ? <img className="upload-preview" src={proofPreview} alt="Selected payment screenshot preview" /> : <span className="upload-icon">↑</span>}<strong>{proofName || "Upload payment screenshot"}</strong><small>{proofPreview ? "Tap to replace this image" : "Choose a photo or take one with your phone"}</small></label>
+                  <div className="upload-title"><span>{paymentAmounts.registration > 0 ? `Screenshot of your ₪${paymentAmounts.registration.toLocaleString("en-US")} registration fee` : "Screenshot of your first payment"}</span><small>{paymentRequiresProof ? "Required" : "Optional"} for {form.method}</small></div>
+                  <label className={proofPreview ? "upload-box has-preview" : "upload-box"}><input type="file" accept="image/*" onChange={chooseProof} />{proofPreview ? <img className="upload-preview" src={proofPreview} alt="Screenshot you selected" /> : <span className="upload-icon">↑</span>}<strong>{proofName || (paymentAmounts.registration > 0 ? "Upload the registration fee screenshot" : "Upload the payment screenshot")}</strong><small>{proofPreview ? "Tap to replace this image" : `Show the ${form.method.toLowerCase()} confirmation for the ${paymentAmounts.registration > 0 ? "registration fee" : "first payment"}.`}</small></label>
                 </>
               )}
               <div className="security-check-card">
