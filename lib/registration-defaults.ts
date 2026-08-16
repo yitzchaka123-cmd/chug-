@@ -4,7 +4,8 @@ import { parseAgreementSections } from "@/lib/agreement-content";
 import { sha256Hex } from "@/lib/security";
 
 export const CURRENT_SCHOOL_YEAR_ID = "school-year-2026-2027";
-export const CURRENT_AGREEMENT_ID = "agreement-2026-2027-v2";
+export const CURRENT_AGREEMENT_ID = "agreement-2026-2027-v3";
+const PREVIOUS_DEFAULT_AGREEMENT_ID = "agreement-2026-2027-v2";
 
 const CASH_REMINDER_TEXT = "Please be responsible for making sure that you pay the monthly amount on time by sending it with your daughter. Please don’t make us run after you for the monthly payment.";
 
@@ -117,12 +118,16 @@ export async function ensureSystemSeed(db: D1Database) {
       INSERT OR IGNORE INTO agreement_versions (
         id, school_year_id, version, title, sections_json,
         content_hash, is_active, effective_at, created_at
-      ) VALUES (?, ?, 2, ?, ?, ?, 1, ?, ?)
+      ) VALUES (?, ?, 3, ?, ?, ?, 1, ?, ?)
     `).bind(
       CURRENT_AGREEMENT_ID, CURRENT_SCHOOL_YEAR_ID,
       `Choir Chug Registration Agreement ${choirConfig.currentYear.label}`,
       sectionsJson, contentHash, now, now,
     ),
+    // Retire the old seeded default only while the new default is also active
+    // (the state right after an upgrade); an administrator who deliberately
+    // re-activates the old version through the Agreements tab is respected.
+    db.prepare(`UPDATE agreement_versions SET is_active = 0 WHERE id = ? AND is_active = 1 AND (SELECT is_active FROM agreement_versions WHERE id = ?) = 1`).bind(PREVIOUS_DEFAULT_AGREEMENT_ID, CURRENT_AGREEMENT_ID),
   ];
   for (const method of defaultMethods) {
     statements.push(db.prepare(`
@@ -181,7 +186,7 @@ export async function ensureCurrentRegistrationConfig(db: D1Database, requestedY
     startsOn: year.starts_on,
     endsOn: year.ends_on,
     agreementVersionId: agreement.id,
-    agreementVersionCode: typeof settings.agreementVersionCode === "string" ? settings.agreementVersionCode : `${year.slug}-v${agreement.version}`,
+    agreementVersionCode: `${year.slug}-v${agreement.version}`,
     agreementContentHash: agreement.content_hash,
     agreementSections: activeAgreementSections,
     proofUploadRequired: Boolean(year.payment_proof_required),

@@ -16,7 +16,6 @@ export default function Home() {
     const headline = heroScene?.querySelector<HTMLElement>(".hero-headline");
     const headlineParts = Array.from(heroScene?.querySelectorAll<HTMLElement>(".hero-headline > span") ?? []);
     const heroActions = heroScene?.querySelector<HTMLElement>(".hero-actions");
-    const studioStory = document.querySelector<HTMLElement>(".studio-story");
     const motionPreference = window.matchMedia("(prefers-reduced-motion: reduce)");
     let frame = 0;
 
@@ -117,14 +116,6 @@ export default function Home() {
         setHeroPixels("--hero-accent-y", progress * (mobile ? -245 : -430));
       }
 
-      if (studioStory) {
-        const studioRect = studioStory.getBoundingClientRect();
-        const studioProgress = Math.min(1, Math.max(0, (window.innerHeight - studioRect.top) / (window.innerHeight + studioRect.height)));
-        const centered = studioProgress - 0.5;
-        studioStory.style.setProperty("--studio-heading-y", `${motionPreference.matches ? 0 : centered * (mobile ? 28 : 54)}px`);
-        studioStory.style.setProperty("--studio-main-y", `${motionPreference.matches ? 0 : centered * (mobile ? -48 : -92)}px`);
-        studioStory.style.setProperty("--studio-stack-y", `${motionPreference.matches ? 0 : centered * (mobile ? -76 : -142)}px`);
-      }
     };
 
     const onScroll = () => {
@@ -259,23 +250,6 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="studio-story section-wide" data-reveal>
-        <div className="studio-heading">
-          <div><p className="eyebrow">Inside a real studio</p><h2>She doesn’t only practice. She creates something real.</h2></div>
-          <p>Studio time gives the girls a focused, exciting goal: listen closely, try again, blend together and hear their own progress.</p>
-        </div>
-        <div className="studio-gallery">
-          <figure className="studio-gallery-main"><img src={choirConfig.photos.studioFriends} alt="Choir students gathered around a studio microphone" /></figure>
-          <div className="studio-gallery-stack">
-            <figure><img src={choirConfig.photos.studioKeyboard} alt="A choir student recording beside a studio keyboard" /></figure>
-            <figure><img src={choirConfig.photos.studioLyrics} alt="A choir student reading lyrics at the microphone" /></figure>
-          </div>
-        </div>
-        <div className="studio-points" aria-label="Studio experience highlights">
-          <span>Guided vocal coaching</span><span>Real recording experience</span><span>Individual attention</span>
-        </div>
-      </section>
-
       <section className="program section" id="program" data-reveal>
         <div className="program-card">
           <div className="program-intro">
@@ -320,7 +294,6 @@ export default function Home() {
           <Link href="/terms">Terms of use</Link>
           <Link href="/privacy">Privacy policy</Link>
           <Link href="/accessibility">Accessibility</Link>
-          <Link className="footer-cancel-link" href="/cancellations">Cancel registration</Link>
         </nav>
         <div className="footer-contact"><a href="tel:+972535906149">{choirConfig.brand.phone}</a><small>© 2026 The Choir Chug. All rights reserved.</small></div>
       </footer>

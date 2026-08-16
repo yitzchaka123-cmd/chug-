@@ -41,11 +41,9 @@ export default function RegistrationPreview() {
   const [signatureData, setSignatureData] = useState("");
   const [approvals, setApprovals] = useState<boolean[]>(approvalAgreementSections.map(() => false));
   const [securityCheckAccepted, setSecurityCheckAccepted] = useState(false);
-  const [guardianAccepted, setGuardianAccepted] = useState(false);
-  const [medicalConsent, setMedicalConsent] = useState(false);
-  const [paymentProofAccepted, setPaymentProofAccepted] = useState(false);
-  const [privacyAccepted, setPrivacyAccepted] = useState(false);
-  const [electronicSignatureAccepted, setElectronicSignatureAccepted] = useState(false);
+  const [finalConsent, setFinalConsent] = useState(false);
+  const [wizardIndex, setWizardIndex] = useState(0);
+  const [saveLinkOpen, setSaveLinkOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submissionError, setSubmissionError] = useState("");
   const [downloadUrl, setDownloadUrl] = useState("");
@@ -140,10 +138,7 @@ export default function RegistrationPreview() {
         if (typeof data.step === "number") setStep(Math.min(4, Math.max(0, Math.floor(data.step))));
         if (Array.isArray(data.approvals)) setApprovals(data.approvals.map(Boolean));
         if (typeof data.securityCheckAccepted === "boolean") setSecurityCheckAccepted(data.securityCheckAccepted);
-        if (typeof data.medicalConsent === "boolean") setMedicalConsent(data.medicalConsent);
-        if (typeof data.guardianAccepted === "boolean") setGuardianAccepted(data.guardianAccepted);
-        if (typeof data.privacyAccepted === "boolean") setPrivacyAccepted(data.privacyAccepted);
-        if (typeof data.electronicSignatureAccepted === "boolean") setElectronicSignatureAccepted(data.electronicSignatureAccepted);
+        setFinalConsent(data.guardianAccepted === true && data.privacyAccepted === true && data.electronicSignatureAccepted === true);
         setDraftToken(draft.token);
         setResumeUrl(`${window.location.origin}/register?resume=${encodeURIComponent(draft.token)}${offer ? `&offer=${encodeURIComponent(offer)}` : ""}`);
         setSaved("Saved progress restored");
@@ -246,13 +241,13 @@ export default function RegistrationPreview() {
     (form.fatherPhone.trim() || form.motherPhone.trim()) &&
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim()),
   );
-  const careComplete = Boolean(form.emergencyName.trim() && form.emergencyPhone.trim() && form.emergencyRelation.trim() && medicalConsent);
+  const careComplete = Boolean(form.emergencyName.trim() && form.emergencyPhone.trim() && form.emergencyRelation.trim());
   const canContinue =
     (step !== 0 || detailsComplete) &&
     (step !== 1 || careComplete) &&
     (step !== 2 || approvals.every(Boolean)) &&
-    (step !== 3 || (securityCheckAccepted && (!paymentRequiresProof || Boolean(proofName)) && (!proofName || paymentProofAccepted)));
-  const canComplete = Boolean(signatureData) && form.signer.trim().length > 1 && guardianAccepted && privacyAccepted && electronicSignatureAccepted;
+    (step !== 3 || (securityCheckAccepted && (!paymentRequiresProof || Boolean(proofName))));
+  const canComplete = Boolean(signatureData) && form.signer.trim().length > 1 && finalConsent;
   const wideStep = step === 2 || step === 4;
   const signingDate = useMemo(() => new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Jerusalem" }).format(new Date()), []);
 
@@ -269,7 +264,6 @@ export default function RegistrationPreview() {
     setProofFile(file ?? null);
     setProofName(file?.name ?? "");
     setProofPreview("");
-    setPaymentProofAccepted(false);
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => setProofPreview(typeof reader.result === "string" ? reader.result : "");
@@ -298,11 +292,11 @@ export default function RegistrationPreview() {
         agreementVersion: activeAgreementVersion,
         offerToken: offerToken || undefined,
         securityCheckAccepted,
-        medicalConsent,
-        paymentProofAccepted,
-        guardianAccepted,
-        privacyAccepted,
-        electronicSignatureAccepted,
+        medicalConsent: finalConsent,
+        paymentProofAccepted: Boolean(proofFile),
+        guardianAccepted: finalConsent,
+        privacyAccepted: finalConsent,
+        electronicSignatureAccepted: finalConsent,
         signatureData,
         draftToken: draftToken || undefined,
       }));
@@ -332,14 +326,14 @@ export default function RegistrationPreview() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           token: draftToken || undefined,
-          data: { form, step, approvals, securityCheckAccepted, medicalConsent, guardianAccepted, privacyAccepted, electronicSignatureAccepted, offerToken: offerToken || null },
+          data: { form, step, approvals, securityCheckAccepted, medicalConsent: finalConsent, guardianAccepted: finalConsent, privacyAccepted: finalConsent, electronicSignatureAccepted: finalConsent, offerToken: offerToken || null },
         }),
       });
       const result = await response.json() as { token?: string; resumeUrl?: string; error?: string };
       if (!response.ok || !result.token || !result.resumeUrl) throw new Error(result.error || "Progress could not be saved.");
       setDraftToken(result.token);
       setResumeUrl(`${window.location.origin}${result.resumeUrl}`);
-      setSaved("Progress saved");
+      setSaveLinkOpen(true);
     } catch (error) {
       setSubmissionError(error instanceof Error ? error.message : "Progress could not be saved.");
     } finally {
@@ -399,7 +393,6 @@ export default function RegistrationPreview() {
           {step === 0 && (
             <div className="form-section">
               <div className="form-section-title"><span>01</span><div><h2>Participant information</h2><p>Tell us who is joining the choir.</p></div></div>
-              <aside className="collection-notice"><strong>Before you enter personal information</strong><p>Providing information is voluntary, but fields marked as required will be needed to process registration, contact a parent, form groups, administer payment and prepare the agreement. The Choir Chug, operated by Nechama Abergil in Beit Shemesh, will use it for those purposes and authorized service providers may process it for hosting, storage and delivery. <Link href="/privacy" target="_blank">Read the full Privacy Policy and your access and correction rights.</Link></p></aside>
               <div className="field-grid">
                 <label className="field field-wide"><span>Daughter’s full name</span><input required value={form.daughter} onChange={(event) => update("daughter", event.target.value)} placeholder="Full name" /></label>
                 <label className="field"><span>Date of birth</span><input required type="date" value={form.birthdate} onInput={(event) => update("birthdate", event.currentTarget.value)} /></label>
@@ -427,43 +420,59 @@ export default function RegistrationPreview() {
                 <label className="field field-wide"><span>Medication or regular assistance</span><textarea value={form.medications} onChange={(event) => update("medications", event.target.value)} placeholder="Write ‘None’ if there is nothing we need to know." /></label>
                 <label className="field field-wide"><span>Additional private note</span><textarea value={form.additionalNote} onChange={(event) => update("additionalNote", event.target.value)} placeholder="Optional" /></label>
               </div>
-              <label className="standalone-consent"><input type="checkbox" checked={medicalConsent} onChange={(event) => setMedicalConsent(event.target.checked)} /><span>I agree that necessary allergy, medical and assistance information may be used by authorized Choir Chug staff for safe participation and emergencies. I understand I should provide only relevant information.</span></label>
+              <p className="upload-privacy">This information stays private and is used only so we can care for your daughter safely.</p>
             </div>
           )}
 
-          {step === 2 && (
-            <div className="form-section">
-              <div className="form-section-title"><span>03</span><div><h2>Full Registration Agreement</h2><p>Read each section and confirm your understanding. This exact wording will appear in the document you sign.</p></div></div>
-              <div className="agreement-progress"><span style={{ width: `${(approvals.filter(Boolean).length / approvals.length) * 100}%` }} /></div>
-              <p className="agreement-count">{approvals.filter(Boolean).length} of {approvals.length} sections confirmed · Agreement version {activeAgreementVersion}</p>
-              <div className="agreement-list full-agreement-list">
-                {activeAgreementSections.map((section) => {
-                  const approvalIndex = activeApprovalSections.findIndex((candidate) => candidate.title === section.title);
-                  const approved = approvalIndex < 0 || approvals[approvalIndex];
-                  return <section className={approved ? "agreement-section approved" : "agreement-section"} key={section.title}>
-                    {section.title !== "Introduction" && <h3>{section.title}</h3>}
-                    <div className="agreement-section-copy">{section.paragraphs.map((item) => <p key={item.id}>{item.text}</p>)}</div>
-                    {approvalIndex >= 0 && <label className="agreement-section-approval"><input type="checkbox" checked={approvals[approvalIndex]} onChange={(event) => setApprovals((current) => current.map((value, itemIndex) => itemIndex === approvalIndex ? event.target.checked : value))} /><span>I understand</span></label>}
-                  </section>;
-                })}
+          {step === 2 && (() => {
+            const introSection = activeAgreementSections.find((section) => section.title === "Introduction");
+            const screens: Array<{ approvalIndex: number; title: string; paragraphs: AgreementSection["paragraphs"] }> = [
+              ...(introSection ? [{ approvalIndex: -1, title: "Welcome", paragraphs: introSection.paragraphs }] : []),
+              ...activeApprovalSections.map((section, index) => ({ approvalIndex: index, title: section.title, paragraphs: section.paragraphs })),
+            ];
+            const current = screens[Math.min(wizardIndex, screens.length - 1)];
+            const lastScreen = Math.min(wizardIndex, screens.length - 1) === screens.length - 1;
+            const approvedCount = approvals.filter(Boolean).length;
+            function advance() {
+              if (current.approvalIndex >= 0) setApprovals((values) => values.map((value, index) => index === current.approvalIndex ? true : value));
+              if (lastScreen) {
+                setStep(3);
+                setWizardIndex(0);
+              } else {
+                setWizardIndex((index) => index + 1);
+              }
+              window.scrollTo({ top: 0, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+            }
+            return (
+              <div className="form-section approval-wizard-shell">
+                <div className="form-section-title"><span>03</span><div><h2>Registration Agreement</h2><p>One short section at a time - read it, approve it, and move on. This exact wording appears in the document you sign.</p></div></div>
+                <div className="agreement-progress"><span style={{ width: `${((Math.min(wizardIndex, screens.length - 1) + 1) / screens.length) * 100}%` }} /></div>
+                <div className="approval-wizard" key={current.title}>
+                  <p className="wizard-count">{current.approvalIndex >= 0 ? `Section ${current.approvalIndex + 1} of ${activeApprovalSections.length}` : `Agreement version ${activeAgreementVersion}`}</p>
+                  <h3>{current.title}</h3>
+                  <div className="wizard-copy">{current.paragraphs.map((item) => <p key={item.id}>{item.text}</p>)}</div>
+                  <div className="wizard-actions">
+                    {wizardIndex > 0 && <button type="button" className="secondary-button" onClick={() => setWizardIndex((index) => Math.max(0, index - 1))}>← Previous</button>}
+                    <button type="button" className="button" onClick={advance}>{current.approvalIndex < 0 ? "Let’s begin" : lastScreen ? "I approve - finish" : approvals[current.approvalIndex] ? "Next" : "I approve"} <span aria-hidden="true">→</span></button>
+                  </div>
+                  {current.approvalIndex >= 0 && <p className="wizard-progress-note">{approvedCount} of {activeApprovalSections.length} sections approved</p>}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {step === 3 && (
             <div className="form-section">
               <div className="form-section-title"><span>04</span><div><h2>Payment information</h2><p>Choose a method and add payment proof where applicable.</p></div></div>
               <div className="payment-total monthly-payment"><span>Monthly choir payment</span><strong><bdi dir="ltr">₪{payment.monthlyAmount.toLocaleString("en-US")}</bdi><em>/month</em></strong><small>* June is <bdi dir="ltr">₪{payment.juneAmount.toLocaleString("en-US")}</bdi>{payment.registrationFeeAmount > 0 && <> · One-time registration fee <bdi dir="ltr">₪{payment.registrationFeeAmount.toLocaleString("en-US")}</bdi></>}</small></div>
               <div className="payment-methods">
-                {paymentMethods.map((method) => <label className={form.method === method ? "selected" : ""} key={method}><input type="radio" name="payment" value={method} checked={form.method === method} onChange={(event) => { update("method", event.target.value); setProofName(""); setProofPreview(""); setProofFile(null); setPaymentProofAccepted(false); }} /><span>{method}</span></label>)}
+                {paymentMethods.map((method) => <label className={form.method === method ? "selected" : ""} key={method}><input type="radio" name="payment" value={method} checked={form.method === method} onChange={(event) => { update("method", event.target.value); setProofName(""); setProofPreview(""); setProofFile(null); }} /><span>{method}</span></label>)}
               </div>
               {selectedMethod?.instructions && <p className="payment-method-note"><strong>{selectedMethod.label}:</strong> {selectedMethod.instructions}</p>}
               {paymentAllowsProof && (
                 <>
                   <div className="upload-title"><span>Payment proof</span><small>{paymentRequiresProof ? "Required" : "Optional"} for {form.method}</small></div>
                   <label className={proofPreview ? "upload-box has-preview" : "upload-box"}><input type="file" accept="image/*" onChange={chooseProof} />{proofPreview ? <img className="upload-preview" src={proofPreview} alt="Selected payment screenshot preview" /> : <span className="upload-icon">↑</span>}<strong>{proofName || "Upload payment screenshot"}</strong><small>{proofPreview ? "Tap to replace this image" : "Choose a photo or take one with your phone"}</small></label>
-                  <p className="upload-privacy">Before uploading, crop or cover balances, unrelated transactions, identity numbers and other unnecessary details. A transaction reference, date and amount will be offered as an alternative in the working system.</p>
-                  {proofName && <label className="standalone-consent"><input type="checkbox" checked={paymentProofAccepted} onChange={(event) => setPaymentProofAccepted(event.target.checked)} /><span>I confirm that I removed unrelated sensitive details and agree to this payment proof being used to verify and record the payment.</span></label>}
                 </>
               )}
               <div className="security-check-card">
@@ -533,16 +542,14 @@ export default function RegistrationPreview() {
               <p className="signature-help">Sign using your finger, stylus, mouse or trackpad, or use the accessible typed-signature option.</p>
               {signatureData && <div className="signature-float-preview" role="status"><img src={signatureData} alt="" /><span>Signature added to the agreement</span></div>}
               <div className="legal-confirmations">
-                <label><input type="checkbox" checked={guardianAccepted} onChange={(event) => setGuardianAccepted(event.target.checked)} /><span>I confirm that I am the participant’s parent or legal guardian and that I am authorized to provide the child’s and emergency contacts’ information.</span></label>
-                <label><input type="checkbox" checked={privacyAccepted} onChange={(event) => setPrivacyAccepted(event.target.checked)} /><span>I have read the <Link href="/privacy" target="_blank">Privacy Policy</Link> and <Link href="/terms" target="_blank">Terms of Use</Link> and understand how the registration information will be used.</span></label>
-                <label><input type="checkbox" checked={electronicSignatureAccepted} onChange={(event) => setElectronicSignatureAccepted(event.target.checked)} /><span>I agree to sign and receive this agreement electronically.</span></label>
+                <label><input type="checkbox" checked={finalConsent} onChange={(event) => setFinalConsent(event.target.checked)} /><span>I confirm that I am the participant’s parent or legal guardian, I have read the <Link href="/privacy" target="_blank">Privacy Policy</Link> and <Link href="/terms" target="_blank">Terms of Use</Link>, and I agree to sign and receive this agreement electronically.</span></label>
               </div>
             </div>
           )}
 
           <div className="form-actions">
             <button className="secondary-button" type="button" onClick={() => step > 0 ? setStep(step - 1) : window.location.href = "/"}>{step > 0 ? "Back" : "Return home"}</button>
-            {step < steps.length - 1 ? <button className="button" type="button" disabled={!canContinue} onClick={goForward}>Continue <span>→</span></button> : <button className="button" type="button" disabled={!canComplete || submitting} onClick={submitRegistration}>{submitting ? "Saving…" : "Sign & complete"} <span>→</span></button>}
+            {step === 2 ? null : step < steps.length - 1 ? <button className="button" type="button" disabled={!canContinue} onClick={goForward}>Continue <span>→</span></button> : <button className="button" type="button" disabled={!canComplete || submitting} onClick={submitRegistration}>{submitting ? "Saving…" : "Sign & complete"} <span>→</span></button>}
           </div>
           {submissionError && <p className="submission-error" role="alert">{submissionError}</p>}
         </section>
@@ -550,7 +557,23 @@ export default function RegistrationPreview() {
         {!wideStep && registrationSummary}
       </div>
 
-      {saved && <div className="toast" role="status"><strong>{saved}</strong><span>{resumeUrl ? "Your private return link is ready." : "You can continue from where you stopped."}</span><div className="toast-actions">{resumeUrl && <button onClick={() => { void navigator.clipboard.writeText(resumeUrl); setSaved("Return link copied"); }}>Copy</button>}<button onClick={() => setSaved("")} aria-label="Dismiss">×</button></div></div>}
+      {saved && <div className="toast" role="status"><strong>{saved}</strong><span>You can continue from where you stopped.</span><div className="toast-actions"><button onClick={() => setSaved("")} aria-label="Dismiss">×</button></div></div>}
+      {saveLinkOpen && resumeUrl && (
+        <div className="modal-backdrop" role="presentation" onMouseDown={() => setSaveLinkOpen(false)}>
+          <section className="save-link-modal" role="dialog" aria-modal="true" aria-labelledby="save-link-title" onMouseDown={(event) => event.stopPropagation()}>
+            <span className="save-link-icon">✓</span>
+            <p className="eyebrow">Progress saved</p>
+            <h2 id="save-link-title">Save this link to continue registering your child</h2>
+            <p>Open it any time in the next 30 days and you’ll be right back where you stopped{form.email.trim() ? " - we’ve also queued it to your email" : ""}.</p>
+            <input className="save-link-field" readOnly value={resumeUrl} onFocus={(event) => event.currentTarget.select()} aria-label="Your private return link" />
+            <div className="save-link-actions">
+              <button className="button" type="button" onClick={async () => { await navigator.clipboard.writeText(resumeUrl).catch(() => undefined); setSaveLinkOpen(false); setSaved("Return link copied"); }}>Copy link</button>
+              <a className="secondary-button" href={`https://wa.me/?text=${encodeURIComponent(`My Choir Chug registration link: ${resumeUrl}`)}`} target="_blank" rel="noreferrer">Send to myself on WhatsApp</a>
+              <button className="text-link" type="button" onClick={() => setSaveLinkOpen(false)}>Done</button>
+            </div>
+          </section>
+        </div>
+      )}
       {cashReminderOpen && (
         <div className="modal-backdrop" role="presentation" onMouseDown={() => setCashReminderOpen(false)}>
           <section className="cash-reminder-modal" role="dialog" aria-modal="true" aria-labelledby="cash-reminder-title" onMouseDown={(event) => event.stopPropagation()}>

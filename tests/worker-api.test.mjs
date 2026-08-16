@@ -97,8 +97,8 @@ test("registration, custom pricing, schedules, PDFs, admin data and backups work
     assert.deepEqual(customConfig.paymentMethods, ["Cash"]);
     const customAgreementText = customConfig.agreementSections.flatMap((section) => section.paragraphs).map((paragraph) => paragraph.text).join("\n");
     assert.match(customAgreementText, /Test discount/);
-    assert.match(customAgreementText, /Monthly Cost: 150₪/);
-    assert.doesNotMatch(customAgreementText, /Monthly Cost: 200₪/);
+    assert.match(customAgreementText, /Monthly cost: 150₪/);
+    assert.doesNotMatch(customAgreementText, /Monthly cost: 200₪/);
 
     const blankLink = await json(await request("/api/admin/custom-links", { method: "POST", headers: adminHeaders, body: JSON.stringify({ yearId, label: "Blank fees keep standard pricing", registrationFee: null, monthlyFee: null, juneFee: null, securityCheck: null, oneTimeAmount: null }) }));
     const blankToken = new URL(blankLink.url).searchParams.get("offer");

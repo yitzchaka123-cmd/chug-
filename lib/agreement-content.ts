@@ -82,9 +82,9 @@ export function personalizeAgreementSections(base: readonly AgreementSection[], 
       return {
         title: section.title,
         paragraphs: section.paragraphs.map((paragraph) => {
-          if (paragraph.id === "schedule-calendar") return { ...paragraph, text: `The choir will operate according to the Israeli public school calendar for the ${pricing.schoolYearName} school year, with sessions taking place every ${weekdaySingular} on days when school is in session.` };
-          if (paragraph.id === "schedule-dates") return { ...paragraph, text: `The choir year will run from ${formatDate(pricing.startsOn, true)} through ${formatDate(pricing.endsOn)}. No regular Choir Chug sessions will take place after ${formatDate(pricing.endsOn)}.` };
-          if (paragraph.id === "schedule-school-closure") return { ...paragraph, text: `If there is no school on a particular ${weekdaySingular}, there will be no choir session that day. This applies even if school is canceled at the last minute due to war, a national emergency, security circumstances, or any other reason.` };
+          if (paragraph.id === "schedule-calendar") return { ...paragraph, text: `We follow the Israeli public school calendar for the ${pricing.schoolYearName} school year: choir meets every ${weekdaySingular} that school is in session, from ${formatDate(pricing.startsOn, true)} until ${formatDate(pricing.endsOn)} (no regular sessions after that date).` };
+          if (paragraph.id === "schedule-dates") return { ...paragraph, text: `The choir year runs from ${formatDate(pricing.startsOn, true)} through ${formatDate(pricing.endsOn)}.` };
+          if (paragraph.id === "schedule-school-closure") return { ...paragraph, text: `If there is no school on a ${weekdaySingular} - including a last-minute closure for any reason, security situations included - there is no choir that day. Individual cancelled sessions are not refunded, and the monthly fee stays the same as long as at least one session takes place that month. If a whole calendar month passes with no sessions at all, that month is simply free.` };
           return { ...paragraph };
         }),
       };
@@ -92,11 +92,11 @@ export function personalizeAgreementSections(base: readonly AgreementSection[], 
     if (section.title === "Session Length & Group Times") {
       return {
         title: section.title,
-        paragraphs: section.paragraphs.map((paragraph) => paragraph.id === "schedule-length-groups" ? { ...paragraph, text: `Each Choir Chug session will be ${pricing.sessionLengthMinutes} minutes long. All groups will meet on ${weekday} between ${displayTime(pricing.scheduleStartTime)} and ${displayTime(pricing.scheduleEndTime)}. The exact time for each group will be shared with parents once registration is complete, so we can arrange the girls into the groups that fit their ages best. We will, b’ezrat Hashem, open the Choir Chug with a wonderful group of girls. If we do not reach the minimum number of girls needed to run the program, we may need to cancel the Choir Chug for this year. If that happens, all payments will be returned.` } : { ...paragraph }),
+        paragraphs: section.paragraphs.map((paragraph) => paragraph.id === "schedule-length-groups" ? { ...paragraph, text: `Sessions are ${pricing.sessionLengthMinutes} minutes, on ${weekday} between ${displayTime(pricing.scheduleStartTime)} and ${displayTime(pricing.scheduleEndTime)}. We share each group’s exact time once registration closes, so the girls land in the groups that fit their ages best. We can’t wait to open with a wonderful group of girls, b’ezrat Hashem - and in the unlikely case we do not reach the minimum number needed to run the program this year, every payment is returned in full.` } : { ...paragraph }),
       };
     }
     if (section.title === "Location") {
-      return { title: section.title, paragraphs: section.paragraphs.map((paragraph) => paragraph.id === "location" ? { ...paragraph, text: `Choir Chug sessions will take place at ${pricing.location}. The exact location for each group will be provided to parents.` } : { ...paragraph }) };
+      return { title: section.title, paragraphs: section.paragraphs.map((paragraph) => paragraph.id === "location" ? { ...paragraph, text: `Choir Chug sessions take place at ${pricing.location} - your daughter’s exact location arrives together with her group placement.` } : { ...paragraph }) };
     }
     if (section.title !== "Payment Terms") return { title: section.title, paragraphs: section.paragraphs.map((paragraph) => ({ ...paragraph })) };
     const generatedIds = new Set(["payment-monthly", "payment-june", "payment-total", "payment-first-month", "payment-security-check", "payment-schedule", "payment-methods", "payment-private-arrangement"]);
@@ -108,13 +108,13 @@ export function personalizeAgreementSections(base: readonly AgreementSection[], 
       title: section.title,
       paragraphs: [
         ...customIntroduction,
-        { id: "payment-monthly", text: `Monthly Cost: ${shekels(pricing.monthlyFeeAgorot)}₪ per month, per girl.` },
+        { id: "payment-monthly", text: `Monthly cost: ${shekels(pricing.monthlyFeeAgorot)}₪ per girl.` },
         { id: "payment-june", text: `June: ${shekels(pricing.juneFeeAgorot)}₪.` },
-        { id: "payment-total", text: `Total Cost for this Choir Year payment schedule: ${shekels(totalAgorot)}₪ per girl.` },
-        { id: "payment-first-month", text: `The first payment is ${shekels(pricing.registrationFeeAgorot)}₪. After the first month, participation becomes a commitment for the remainder of the choir year, and the monthly payments must continue until the end of the choir year.` },
-        { id: "payment-security-check", text: `In addition to the monthly payments, please provide a security check for the remaining ${pricing.securityCheckMonths} balance after the registration payment. The security check amount is ${shekels(pricing.securityCheckAgorot)}₪. It will be held only as security and used only if an agreed payment remains unpaid, after we contact you first.` },
+        { id: "payment-total", text: `Total for this choir year’s payment schedule: ${shekels(totalAgorot)}₪ per girl.` },
+        { id: "payment-first-month", text: `The first payment is ${shekels(pricing.registrationFeeAgorot)}₪ - your trial month. From the second month, participation becomes a commitment for the rest of the choir year: it can no longer be cancelled, and the monthly payments continue through the end.` },
+        { id: "payment-security-check", text: `Alongside the monthly payments, we ask for one security check covering the ${pricing.securityCheckMonths} balance after the registration payment. The security check amount is ${shekels(pricing.securityCheckAgorot)}₪. It is a safety net only - never used unless an agreed payment stays unpaid, and we will always speak with you first.` },
         { id: "payment-schedule", text: `Payment schedule: ${planSummary}.` },
-        { id: "payment-methods", text: `Payment Options:\n${methods}` },
+        { id: "payment-methods", text: `Payment options:\n${methods}` },
         ...preservedParagraphs,
         ...section.paragraphs.filter((paragraph) => ["payment-cash", "payment-bank"].includes(paragraph.id)).map((paragraph) => ({ ...paragraph })),
       ],

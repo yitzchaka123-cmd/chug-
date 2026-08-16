@@ -31,11 +31,11 @@ test("a custom registration arrangement changes the exact agreement snapshot", (
   assert.ok(payment);
   const text = payment.paragraphs.map((paragraph) => paragraph.text).join("\n");
   assert.match(text, /Sibling arrangement/);
-  assert.match(text, /Monthly Cost: 150₪/);
-  assert.match(text, /Total Cost[^\n]+1,380₪/);
+  assert.match(text, /Monthly cost: 150₪/);
+  assert.match(text, /Total for this choir year[^\n]+1,380₪/);
   assert.match(text, /October: 100₪/);
   assert.match(text, /Standing order/);
-  assert.doesNotMatch(text, /Monthly Cost: 200₪/);
+  assert.doesNotMatch(text, /Monthly cost: 200₪/);
 });
 
 test("school-year settings flow into schedule agreement wording", () => {

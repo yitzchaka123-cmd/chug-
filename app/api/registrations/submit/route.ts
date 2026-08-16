@@ -174,7 +174,6 @@ export async function POST(request: Request) {
     const proofPolicy = offer?.proofPolicy || methodRecord?.proofPolicy || (settings.proofUploadRequired ? "required" : "optional");
     if (proofPolicy === "none" && proofFile) return jsonError("This payment method does not accept a payment screenshot.");
     if (proofPolicy === "required" && !isCashMethod && !proofFile) return jsonError("A payment screenshot is required for this payment method.");
-    if (proofFile && payload.paymentProofAccepted !== true) return jsonError("Please confirm the payment-proof privacy notice.");
     const proof = proofFile ? await validatePaymentProofImage(proofFile, proofFile.name) : null;
 
     const registrationId = crypto.randomUUID();

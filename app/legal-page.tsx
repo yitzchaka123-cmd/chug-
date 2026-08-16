@@ -12,7 +12,6 @@ export function LegalPage({ document, actions }: { document: LegalDocument; acti
       </header>
       <article className="legal-document">
         <div className="legal-title"><p className="eyebrow">{document.eyebrow}</p><h1>{document.title}</h1><p>{document.intro}</p><small>Last updated: {legalDetails.lastUpdated}</small></div>
-        <aside className="legal-draft-note"><strong>Public-launch notice</strong><p>{legalDetails.launchNotice}</p></aside>
         {actions}
         <div className="legal-sections">
           {document.sections.map((section) => (
@@ -24,7 +23,7 @@ export function LegalPage({ document, actions }: { document: LegalDocument; acti
           ))}
         </div>
       </article>
-      <footer className="legal-footer"><Link href="/terms">Terms</Link><Link href="/privacy">Privacy</Link><Link href="/accessibility">Accessibility</Link><Link href="/cancellations">Cancel registration</Link></footer>
+      <footer className="legal-footer"><Link href="/terms">Terms</Link><Link href="/privacy">Privacy</Link><Link href="/accessibility">Accessibility</Link></footer>
     </main>
   );
 }

@@ -12,12 +12,10 @@ export type LegalDocument = {
 };
 
 export const legalDetails = {
-  lastUpdated: "14 August 2026",
+  lastUpdated: "16 August 2026",
   operator: "The Choir Chug, operated by Nechama Abergil",
   location: "Beit Shemesh, Israel",
   phone: "053-590-6149",
-  launchNotice:
-    "The registration system stores personal information, signed agreements and private uploads. Before public registration opens, the operator must add the full business identification, service address and privacy email, confirm provider locations and retention periods, and obtain an Israeli legal and accessibility review.",
 } as const;
 
 export const legalDocuments = {
@@ -135,7 +133,13 @@ export const legalDocuments = {
       {
         heading: "Registration, payment and cancellation",
         paragraphs: [
-          "A registration becomes binding only after the applicable annual agreement is completed and the parent receives confirmation. Prices, payment methods, discount terms and cancellation information will be displayed before signing. Nothing on this website limits cancellation, refund or other rights that cannot lawfully be waived. See the dedicated Cancel Registration page.",
+          `A registration becomes binding only after the applicable annual agreement is completed and the parent receives confirmation. Prices, payment methods, discount terms and cancellation information will be displayed before signing. Nothing on this website limits cancellation, refund or other rights that cannot lawfully be waived. Cancellation requests and transaction questions may be made by phone or written message to ${legalDetails.phone}.`,
+        ],
+      },
+      {
+        heading: "Medical and emergency information",
+        paragraphs: [
+          "By completing registration, the parent agrees that the allergy, medical and assistance information provided during registration may be used by authorized Choir Chug staff for the participant’s safe participation and in emergencies. Please provide only information that is relevant for the program.",
         ],
       },
       {
@@ -194,12 +198,6 @@ export const legalDocuments = {
         ],
       },
       {
-        heading: "Current limitations",
-        paragraphs: [
-          "The signature canvas includes a signer-name field, redraw control and typed-signature alternative. Generated PDFs, the live parent calendar and any third-party email content still require a formal keyboard, screen-reader and document-accessibility review before public launch.",
-        ],
-      },
-      {
         heading: "Motion controls",
         paragraphs: [
           "The site follows the device’s reduced-motion preference. A visible site-level motion control will be added if testing shows the stronger parallax can otherwise make content difficult to use.",
@@ -215,32 +213,6 @@ export const legalDocuments = {
         heading: "Accessibility contact",
         paragraphs: [
           `If you encounter a barrier or need an accessible alternative, please call Nechama at ${legalDetails.phone}. Please describe the page, action and device involved. A dedicated accessibility email and the statement’s formal review date will be added before launch.`,
-        ],
-      },
-    ],
-  },
-  cancellations: {
-    eyebrow: "A direct way to contact us",
-    title: "Cancel Registration",
-    intro:
-      "Use this page to request cancellation or ask about a transaction. Mandatory rights under Israeli law apply even if an annual agreement says otherwise.",
-    sections: [
-      {
-        heading: "How to make a request",
-        paragraphs: [
-          "Send a written WhatsApp request or call Nechama. Include the parent’s full name, participant’s name, school year, contact number and registration or transaction date. Do not send medical information, bank-account screenshots or identity numbers in the cancellation message.",
-        ],
-      },
-      {
-        heading: "What happens next",
-        paragraphs: [
-          "Receipt of the request will be confirmed, the registration record will be located, and the applicable annual agreement and statutory cancellation rights will be reviewed. The response will explain the effective cancellation date and any refund or amount lawfully due. A written confirmation should be kept by both sides.",
-        ],
-      },
-      {
-        heading: "Important",
-        paragraphs: [
-          "The program’s planned first-month cancellation arrangement does not reduce any non-waivable right provided by Israeli law. Exact remote-transaction and pre-start cancellation wording, the operator’s business identification and all available statutory cancellation methods must be finalized by an Israeli consumer-law professional before live registration opens.",
         ],
       },
     ],
