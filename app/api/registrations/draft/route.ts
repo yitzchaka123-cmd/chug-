@@ -3,6 +3,7 @@ import { deliverOutboxEmail } from "@/lib/email";
 import { getRuntimeEnv } from "@/lib/runtime-env";
 import { resolveRegistrationOffer } from "@/lib/pricing";
 import { decryptJson, encryptJson, hashOpaqueToken, randomOpaqueToken, sha256Hex } from "@/lib/security";
+import { validatePaymentProofImage } from "@/lib/uploads";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,20 @@ function stringField(value: unknown, limit: number) {
 export async function POST(request: Request) {
   try {
     const runtime = getRuntimeEnv();
-    const body = await request.json() as DraftBody;
+    // Saving progress may carry the registration-fee screenshot, so the parent
+    // does not have to find the photo again when they come back.
+    let body: DraftBody;
+    let proofFile: Blob | null = null;
+    if ((request.headers.get("content-type") || "").includes("multipart/form-data")) {
+      const formData = await request.formData();
+      const rawPayload = formData.get("payload");
+      if (typeof rawPayload !== "string" || rawPayload.length > 750_000) return Response.json({ error: "Draft data is required." }, { status: 400 });
+      try { body = JSON.parse(rawPayload) as DraftBody; } catch { return Response.json({ error: "Draft data is required." }, { status: 400 }); }
+      const entry = formData.get("proof");
+      proofFile = entry && typeof entry !== "string" && entry.size > 0 ? entry : null;
+    } else {
+      body = await request.json() as DraftBody;
+    }
     if (!body.data || typeof body.data !== "object") return Response.json({ error: "Draft data is required." }, { status: 400 });
     const data = body.data as Record<string, unknown>;
     const form = data.form && typeof data.form === "object" ? data.form as Record<string, unknown> : {};
@@ -77,6 +91,26 @@ export async function POST(request: Request) {
       ).run();
     }
 
+    let savedProof: { fileId: string; fileName: string; byteSize: number } | null = null;
+    const existingProof = await runtime.DB.prepare(`SELECT id, storage_key, original_filename, byte_size FROM stored_files WHERE registration_id = ? AND kind = 'payment_proof' AND status = 'active' ORDER BY uploaded_at DESC LIMIT 1`).bind(registrationId).first<{ id: string; storage_key: string; original_filename: string | null; byte_size: number }>();
+    if (proofFile) {
+      const proof = await validatePaymentProofImage(proofFile, "name" in proofFile ? String(proofFile.name) : "screenshot");
+      const proofFileId = crypto.randomUUID();
+      const proofKey = `registrations/${settings.schoolYearId}/${registrationId}/proof/${proofFileId}.${proof.extension}`;
+      await runtime.BUCKET.put(proofKey, proof.bytes, { httpMetadata: { contentType: proof.mimeType }, customMetadata: proof.metadata });
+      const statements: D1PreparedStatement[] = [];
+      if (existingProof) statements.push(runtime.DB.prepare(`DELETE FROM stored_files WHERE id = ?`).bind(existingProof.id));
+      statements.push(runtime.DB.prepare(`
+        INSERT INTO stored_files (id, registration_id, kind, storage_key, original_filename, mime_type, byte_size, sha256, status, metadata_json, uploaded_at)
+        VALUES (?, ?, 'payment_proof', ?, ?, ?, ?, ?, 'active', ?, ?)
+      `).bind(proofFileId, registrationId, proofKey, proof.fileName, proof.mimeType, proof.size, await sha256Hex(proof.bytes), JSON.stringify(proof.metadata), now));
+      await runtime.DB.batch(statements);
+      if (existingProof) await runtime.BUCKET.delete(existingProof.storage_key).catch(() => undefined);
+      savedProof = { fileId: proofFileId, fileName: proof.fileName, byteSize: proof.size };
+    } else if (existingProof) {
+      savedProof = { fileId: existingProof.id, fileName: existingProof.original_filename || "screenshot", byteSize: existingProof.byte_size };
+    }
+
     const parentEmail = stringField(form.email, 254).toLowerCase();
     const resumeUrl = `/register?resume=${encodeURIComponent(token)}${offerToken ? `&offer=${encodeURIComponent(offerToken)}` : ""}`;
     if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(parentEmail)) {
@@ -91,7 +125,7 @@ export async function POST(request: Request) {
       }
     }
 
-    return Response.json({ registrationId, token, resumeUrl, agreementVersion: settings.agreementVersionCode, expiresAt }, { headers: { "Cache-Control": "no-store" } });
+    return Response.json({ registrationId, token, resumeUrl, agreementVersion: settings.agreementVersionCode, expiresAt, proof: savedProof }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "Progress could not be saved." }, { status: 500 });
   }
@@ -106,7 +140,11 @@ export async function GET(request: Request) {
     const row = await runtime.DB.prepare(`SELECT id, form_snapshot_json FROM registrations WHERE draft_token_hash = ? AND status = 'draft' AND (draft_expires_at IS NULL OR draft_expires_at > ?) LIMIT 1`).bind(tokenHash, new Date().toISOString()).first<DraftRow>();
     if (!row) return Response.json({ error: "Saved registration was not found." }, { status: 404 });
     const data = await decryptJson<Record<string, unknown>>(row.form_snapshot_json, runtime.CHOIR_DATA_KEY);
-    return Response.json({ registrationId: row.id, token, data }, { headers: { "Cache-Control": "private, no-store" } });
+    const proofRow = await runtime.DB.prepare(`SELECT id, original_filename, byte_size FROM stored_files WHERE registration_id = ? AND kind = 'payment_proof' AND status = 'active' ORDER BY uploaded_at DESC LIMIT 1`).bind(row.id).first<{ id: string; original_filename: string | null; byte_size: number }>();
+    return Response.json({
+      registrationId: row.id, token, data,
+      proof: proofRow ? { fileId: proofRow.id, fileName: proofRow.original_filename || "screenshot", byteSize: proofRow.byte_size } : null,
+    }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "Saved progress could not be loaded." }, { status: 500 });
   }

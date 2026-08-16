@@ -122,6 +122,23 @@ test("registration, custom pricing, schedules, PDFs, admin data and backups work
     const resumed = await json(await request(`/api/registrations/draft?token=${encodeURIComponent(draft.token)}`));
     assert.equal(resumed.data.form.daughter, "Test Student");
 
+    // A screenshot attached while saving progress must survive the round trip.
+    const pngBytes = Uint8Array.from(atob("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAF/gL+XzmF+wAAAABJRU5ErkJggg=="), (c) => c.charCodeAt(0));
+    const proofDraftBody = new FormData();
+    proofDraftBody.set("payload", JSON.stringify({ token: draft.token, data: { form: fakeForm, step: 3, approvals: [], offerToken } }));
+    proofDraftBody.set("proof", new Blob([pngBytes], { type: "image/png" }), "transfer.png");
+    const encodedProofDraft = new Response(proofDraftBody);
+    const draftWithProof = await json(await request("/api/registrations/draft", {
+      method: "POST",
+      headers: { "Content-Type": encodedProofDraft.headers.get("content-type") },
+      body: await encodedProofDraft.arrayBuffer(),
+    }));
+    assert.ok(draftWithProof.proof, "saving progress must keep the screenshot");
+    assert.equal(draftWithProof.proof.fileName, "transfer.png");
+    const resumedWithProof = await json(await request(`/api/registrations/draft?token=${encodeURIComponent(draft.token)}`));
+    assert.ok(resumedWithProof.proof, "resuming must report the screenshot already held");
+    assert.equal(resumedWithProof.proof.fileName, "transfer.png");
+
     const signatureData = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAF/gL+XzmF+wAAAABJRU5ErkJggg==";
     const formData = new FormData();
     formData.set("payload", JSON.stringify({
@@ -145,6 +162,8 @@ test("registration, custom pricing, schedules, PDFs, admin data and backups work
       body: await encodedForm.arrayBuffer(),
     }));
     assert.ok(submitted.registrationId && submitted.downloadUrl && submitted.scheduleUrl);
+    const submittedDetail = await json(await request(`/api/admin/registrations/${encodeURIComponent(submitted.registrationId)}`, { headers: adminHeaders }));
+    assert.equal(submittedDetail.registration.proofStatus, "not_required", "this registration pays cash, so a screenshot left on the draft is ignored rather than blocking it");
 
     const agreement = await request(requestPath(submitted.downloadUrl));
     assert.equal(agreement.status, 200);

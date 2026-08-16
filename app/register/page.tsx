@@ -35,6 +35,7 @@ export default function RegistrationPreview() {
   const [proofName, setProofName] = useState("");
   const [proofPreview, setProofPreview] = useState("");
   const [proofFile, setProofFile] = useState<File | null>(null);
+  const [savedProof, setSavedProof] = useState<{ fileName: string; byteSize: number } | null>(null);
   const [proofUploadRequired, setProofUploadRequired] = useState(choirConfig.currentYear.payment.proofUpload === "required");
   const [paymentMethods, setPaymentMethods] = useState<readonly string[]>(choirConfig.currentYear.payment.methods);
   const [paymentMethodRecords, setPaymentMethodRecords] = useState<Array<{ label: string; instructions: string; proofPolicy: "required" | "optional" | "none"; cashHandling: boolean }>>([]);
@@ -135,9 +136,10 @@ export default function RegistrationPreview() {
       if (resumeToken) {
         try {
           const response = await fetch(`/api/registrations/draft?token=${encodeURIComponent(resumeToken)}`, { cache: "no-store" });
-          const result = await response.json() as { data?: Record<string, unknown>; error?: string; token?: string };
+          const result = await response.json() as { data?: Record<string, unknown>; error?: string; token?: string; proof?: { fileName: string; byteSize: number } | null };
           if (!response.ok || !result.data) throw new Error(result.error || "Saved progress could not be loaded.");
           draft = { token: result.token || resumeToken, data: result.data };
+          if (result.proof && active) setSavedProof(result.proof);
           const draftOffer = typeof result.data.offerToken === "string" ? result.data.offerToken.trim() : "";
           if (draftOffer) offer = draftOffer;
         } catch (error) {
@@ -276,7 +278,7 @@ export default function RegistrationPreview() {
     if (!careComplete) return { step: 1, message: "Please complete the emergency contact details before signing." };
     if (!approvals.length || !approvals.every(Boolean)) return { step: 2, message: "Please approve each part of the registration before signing." };
     if (!securityCheckAccepted) return { step: 3, message: "Please confirm the security check on the payment step before signing." };
-    if (paymentRequiresProof && !proofFile) return { step: 3, message: `Please choose the ${paymentLabel} screenshot again - uploads are not kept when you save your progress.` };
+    if (paymentRequiresProof && !proofFile && !savedProof) return { step: 3, message: `Please choose the ${paymentLabel} screenshot again - uploads are not kept when you save your progress.` };
     return null;
   })();
   const canComplete = Boolean(signatureData) && form.signer.trim().length > 1 && finalConsent;
@@ -301,6 +303,7 @@ export default function RegistrationPreview() {
     setProofFile(file ?? null);
     setProofName(file?.name ?? "");
     setProofPreview("");
+    if (file) setSavedProof(null);
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => setProofPreview(typeof reader.result === "string" ? reader.result : "");
@@ -359,18 +362,24 @@ export default function RegistrationPreview() {
     setSavingDraft(true);
     setSubmissionError("");
     try {
-      const response = await fetch("/api/registrations/draft", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          token: draftToken || undefined,
-          data: { form, step, approvals, securityCheckAccepted, medicalConsent: finalConsent, guardianAccepted: finalConsent, privacyAccepted: finalConsent, electronicSignatureAccepted: finalConsent, offerToken: offerToken || null },
-        }),
+      const draftPayload = JSON.stringify({
+        token: draftToken || undefined,
+        data: { form, step, approvals, securityCheckAccepted, medicalConsent: finalConsent, guardianAccepted: finalConsent, privacyAccepted: finalConsent, electronicSignatureAccepted: finalConsent, offerToken: offerToken || null },
       });
-      const result = await response.json() as { token?: string; resumeUrl?: string; error?: string };
+      let response: Response;
+      if (proofFile) {
+        const draftBody = new FormData();
+        draftBody.set("payload", draftPayload);
+        draftBody.set("proof", proofFile, proofFile.name);
+        response = await fetch("/api/registrations/draft", { method: "POST", body: draftBody });
+      } else {
+        response = await fetch("/api/registrations/draft", { method: "POST", headers: { "Content-Type": "application/json" }, body: draftPayload });
+      }
+      const result = await response.json() as { token?: string; resumeUrl?: string; error?: string; proof?: { fileName: string; byteSize: number } | null };
       if (!response.ok || !result.token || !result.resumeUrl) throw new Error(result.error || "Progress could not be saved.");
       setDraftToken(result.token);
       setResumeUrl(`${window.location.origin}${result.resumeUrl}`);
+      if (result.proof) setSavedProof(result.proof);
       setSaveLinkOpen(true);
     } catch (error) {
       setSubmissionError(friendlyError(error, "Progress could not be saved."));
@@ -510,6 +519,7 @@ export default function RegistrationPreview() {
               {paymentAllowsProof && (
                 <>
                   <div className="upload-title"><span>{paymentAmounts.registration > 0 ? `Screenshot of your ₪${paymentAmounts.registration.toLocaleString("en-US")} registration fee` : "Screenshot of your first payment"}</span><small>{paymentRequiresProof ? "Required" : "Optional"} for {form.method}</small></div>
+                  {savedProof && !proofFile && <p className="saved-proof-note"><span aria-hidden="true">✓</span> Screenshot saved with your progress: <strong>{savedProof.fileName}</strong> ({Math.max(1, Math.round(savedProof.byteSize / 1024))} KB). Choose a file below only if you want to replace it.</p>}
                   <label className={proofPreview ? "upload-box has-preview" : "upload-box"}><input type="file" accept="image/*" onChange={chooseProof} />{proofPreview ? <img className="upload-preview" src={proofPreview} alt="Screenshot you selected" /> : <span className="upload-icon">↑</span>}<strong>{proofName || (paymentAmounts.registration > 0 ? "Upload the registration fee screenshot" : "Upload the payment screenshot")}</strong><small>{proofPreview ? "Tap to replace this image" : `Show the ${form.method.toLowerCase()} confirmation for the ${paymentAmounts.registration > 0 ? "registration fee" : "first payment"}.`}</small></label>
                 </>
               )}
@@ -603,7 +613,7 @@ export default function RegistrationPreview() {
             <span className="save-link-icon">✓</span>
             <p className="eyebrow">Progress saved</p>
             <h2 id="save-link-title">Save this link to continue registering your child</h2>
-            <p>Open it any time in the next 30 days and you’ll be right back where you stopped.</p>
+            <p>Open it any time in the next 30 days and you’ll be right back where you stopped{savedProof ? ", screenshot and all" : ""}.</p>
             <input className="save-link-field" readOnly value={resumeUrl} onFocus={(event) => event.currentTarget.select()} aria-label="Your private return link" />
             <div className="save-link-actions">
               <button className="button" type="button" onClick={async () => { await navigator.clipboard.writeText(resumeUrl).catch(() => undefined); setSaveLinkOpen(false); setSaved("Return link copied"); }}>Copy link</button>

@@ -1508,3 +1508,8 @@ h2 { font-size: clamp(2.5rem, 4.8vw, 4.5rem); line-height: 0.98; }
   .admin-shell h1 { font-size: 1.4rem; }
   .admin-card h2, .admin-card-head h2, .students-header h2 { font-size: 1.15rem; }
 }
+
+/* The registration-fee screenshot kept with saved progress */
+.saved-proof-note { display: flex; align-items: baseline; gap: 8px; margin: 0 0 12px; padding: 12px 14px; border: 1px solid rgba(46, 122, 75, .3); border-radius: 12px; background: #f1f8f3; color: #2f5c40; font-size: .84rem; line-height: 1.5; }
+.saved-proof-note span { color: #2e7a4b; font-weight: 800; }
+.saved-proof-note strong { color: #244c33; }

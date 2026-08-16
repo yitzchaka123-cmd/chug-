@@ -175,15 +175,32 @@ export async function POST(request: Request) {
     const isCashMethod = methodRecord?.cashHandling === true;
     if (isCashMethod && proofFile) return jsonError("Cash registrations do not need a screenshot of the registration fee.");
     const proofPolicy = offer?.proofPolicy || methodRecord?.proofPolicy || (settings.proofUploadRequired ? "required" : "optional");
+
+    // A screenshot attached while saving progress is carried forward, so a
+    // parent who came back through their private link does not upload twice.
+    const draftTokenEarly = text(payload.draftToken, 300);
+    const draftHashEarly = draftTokenEarly ? await hashOpaqueToken(draftTokenEarly, runtime.CHOIR_TOKEN_SECRET) : null;
+    const carriedProof = !proofFile && draftHashEarly
+      ? await runtime.DB.prepare(`
+          SELECT sf.id, sf.storage_key, sf.original_filename, sf.mime_type, sf.byte_size, sf.sha256, sf.metadata_json
+          FROM stored_files sf JOIN registrations r ON r.id = sf.registration_id
+          WHERE r.draft_token_hash = ? AND r.status = 'draft' AND sf.kind = 'payment_proof' AND sf.status = 'active'
+          ORDER BY sf.uploaded_at DESC LIMIT 1
+        `).bind(draftHashEarly).first<{ id: string; storage_key: string; original_filename: string | null; mime_type: string; byte_size: number; sha256: string; metadata_json: string }>()
+      : null;
+
+    // If the parent switched to a method that takes no screenshot, the one held
+    // with the draft is simply left behind rather than blocking the submission.
+    const usableProof = carriedProof && proofPolicy !== "none" && !isCashMethod ? carriedProof : null;
     if (proofPolicy === "none" && proofFile) return jsonError("This payment method does not accept a screenshot.");
-    if (proofPolicy === "required" && !isCashMethod && !proofFile) return jsonError("Please add a screenshot of your registration fee payment.");
+    if (proofPolicy === "required" && !isCashMethod && !proofFile && !usableProof) return jsonError("Please add a screenshot of your registration fee payment.");
     const proof = proofFile ? await validatePaymentProofImage(proofFile, proofFile.name) : null;
 
     const registrationId = crypto.randomUUID();
     const studentId = crypto.randomUUID();
     const enrollmentId = crypto.randomUUID();
     const signatureFileId = crypto.randomUUID();
-    const proofFileId = proof ? crypto.randomUUID() : null;
+    const proofFileId = proof ? crypto.randomUUID() : usableProof ? crypto.randomUUID() : null;
     const pdfFileId = crypto.randomUUID();
     const signedAgreementId = crypto.randomUUID();
     const signedAt = new Date().toISOString();
@@ -239,7 +256,7 @@ export async function POST(request: Request) {
         securityCheckAmount: securityCheckAgorot / 100,
         securityCheckMonths: settings.securityCheckMonths,
         securityCheckAccepted: true,
-        paymentProofReceived: proof ? true : isCashMethod ? undefined : false,
+        paymentProofReceived: proof || usableProof ? true : isCashMethod ? undefined : false,
       },
       sections: effectiveAgreementSections.map((section) => ({
         id: sectionKey(section.title),
@@ -302,7 +319,7 @@ export async function POST(request: Request) {
       parents: { fatherName: form.father, fatherPhone: form.fatherPhone, motherName: form.mother, motherPhone: form.motherPhone, email: form.email },
       care: { emergencyName: form.emergencyName, emergencyPhone: form.emergencyPhone, emergencyRelation: form.emergencyRelation },
       paymentMethod: form.method,
-      consents: { medical: true, guardian: true, privacy: true, electronicSignature: true, securityCheck: true, paymentProof: proof ? true : null },
+      consents: { medical: true, guardian: true, privacy: true, electronicSignature: true, securityCheck: true, paymentProof: proof || usableProof ? true : null },
     });
     const offeredGroup = offer?.groupId
       ? await runtime.DB.prepare(`SELECT id, name FROM groups WHERE id = ? AND school_year_id = ? AND status = 'active' LIMIT 1`).bind(offer.groupId, settings.schoolYearId).first<{ id: string; name: string }>()
@@ -324,7 +341,7 @@ export async function POST(request: Request) {
       form.father || null, form.fatherPhone || null, form.email, form.mother || null, form.motherPhone || null, form.email,
       form.emergencyName, form.emergencyPhone, form.emergencyRelation, encryptedCare, careEnvelope.iv || null,
       form.method, registrationFeeAgorot, monthlyFeeAgorot, juneFeeAgorot, securityCheckAgorot,
-      proof ? "uploaded" : isCashMethod ? "not_required" : "not_provided",
+      proof || usableProof ? "uploaded" : isCashMethod ? "not_required" : "not_provided",
       pricingSnapshot, safeFormSnapshot, downloadTokenHash, signedAt, signedAt, signedAt, signedAt,
     ));
 
@@ -341,6 +358,13 @@ export async function POST(request: Request) {
         INSERT INTO stored_files (id, registration_id, kind, storage_key, original_filename, mime_type, byte_size, sha256, status, metadata_json, uploaded_at)
         VALUES (?, ?, 'payment_proof', ?, ?, ?, ?, ?, 'active', ?, ?)
       `).bind(proofFileId, registrationId, proofKey, proof.fileName, proof.mimeType, proof.size, proofHash, JSON.stringify(proof.metadata), signedAt));
+    } else if (usableProof && proofFileId) {
+      // The draft row is deleted just above, which releases the unique storage
+      // key, so the same stored object is re-pointed at the real registration.
+      statements.push(runtime.DB.prepare(`
+        INSERT INTO stored_files (id, registration_id, kind, storage_key, original_filename, mime_type, byte_size, sha256, status, metadata_json, uploaded_at)
+        VALUES (?, ?, 'payment_proof', ?, ?, ?, ?, ?, 'active', ?, ?)
+      `).bind(proofFileId, registrationId, usableProof.storage_key, usableProof.original_filename, usableProof.mime_type, usableProof.byte_size, usableProof.sha256, usableProof.metadata_json, signedAt));
     }
     statements.push(runtime.DB.prepare(`
       INSERT INTO stored_files (id, registration_id, kind, storage_key, original_filename, mime_type, byte_size, sha256, status, metadata_json, uploaded_at)
@@ -385,12 +409,12 @@ export async function POST(request: Request) {
           period_key, label, due_on, amount_due_agorot, amount_paid_agorot,
           status, method, created_at, updated_at
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)
-      `).bind(crypto.randomUUID(), enrollmentId, settings.schoolYearId, registrationId, firstPayment ? proofFileId : null, period.periodKey, period.label, period.dueOn, period.amountDueAgorot, firstPayment && proof ? "proof_uploaded" : "unpaid", form.method, signedAt, signedAt));
+      `).bind(crypto.randomUUID(), enrollmentId, settings.schoolYearId, registrationId, firstPayment ? proofFileId : null, period.periodKey, period.label, period.dueOn, period.amountDueAgorot, firstPayment && (proof || usableProof) ? "proof_uploaded" : "unpaid", form.method, signedAt, signedAt));
     }
     statements.push(runtime.DB.prepare(`
       INSERT INTO audit_log (school_year_id, actor_type, action, entity_type, entity_id, summary, changes_json, created_at)
       VALUES (?, 'parent', 'registration.completed', 'registration', ?, 'Registration completed and agreement signed', ?, ?)
-    `).bind(settings.schoolYearId, registrationId, JSON.stringify({ agreementVersion: settings.agreementVersionCode, paymentMethod: form.method, proofUploaded: Boolean(proof), customRegistrationLinkId: offer?.id || null }), signedAt));
+    `).bind(settings.schoolYearId, registrationId, JSON.stringify({ agreementVersion: settings.agreementVersionCode, paymentMethod: form.method, proofUploaded: Boolean(proof || usableProof), customRegistrationLinkId: offer?.id || null }), signedAt));
 
     if (offer) statements.push(runtime.DB.prepare(`UPDATE custom_registration_links SET use_count = use_count + 1, updated_at = ? WHERE id = ?`).bind(signedAt, offer.id));
 
