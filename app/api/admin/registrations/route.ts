@@ -70,7 +70,7 @@ export async function GET(request: Request) {
         r.status, r.review_status, r.payment_proof_status, r.payment_status, r.submitted_at,
         e.group_label, e.id AS enrollment_id, s.id AS student_id, s.status AS student_status, sa.id AS agreement_id,
         (SELECT sf.id FROM stored_files sf WHERE sf.registration_id = r.id AND sf.kind = 'payment_proof' AND sf.status = 'active' ORDER BY sf.uploaded_at DESC LIMIT 1) AS proof_file_id,
-        (SELECT COUNT(*) FROM payment_items pi WHERE pi.registration_id = r.id AND pi.status NOT IN ('paid','waived') AND pi.period_key = ?) AS missing_payments
+        (SELECT COUNT(*) FROM payment_items pi WHERE pi.registration_id = r.id AND pi.status NOT IN ('paid','waived') AND (pi.period_key = ? OR pi.period_key LIKE '%-registration')) AS missing_payments
       FROM registrations r
       LEFT JOIN enrollments e ON e.registration_id = r.id
       LEFT JOIN students s ON s.created_from_registration_id = r.id

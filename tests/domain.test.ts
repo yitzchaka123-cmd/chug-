@@ -32,7 +32,8 @@ test("a custom registration arrangement changes the exact agreement snapshot", (
   const text = payment.paragraphs.map((paragraph) => paragraph.text).join("\n");
   assert.match(text, /Sibling arrangement/);
   assert.match(text, /Monthly cost: 150₪/);
-  assert.match(text, /Total for this choir year[^\n]+1,380₪/);
+  assert.match(text, /Total for this choir year[^\n]+1,530₪/);
+  assert.match(text, /Registration fee: a one-time 150₪/);
   assert.match(text, /October: 100₪/);
   assert.match(text, /Standing order/);
   assert.doesNotMatch(text, /Monthly cost: 200₪/);
@@ -65,8 +66,12 @@ test("school-year settings flow into schedule agreement wording", () => {
 
 test("payment plans cover each school-year month and honor overrides", () => {
   const plan = buildPaymentPlan({ startsOn: "2026-09-01", endsOn: "2027-06-15", registrationFeeAgorot: 20_000, monthlyFeeAgorot: 20_000, juneFeeAgorot: 10_000, monthOverrides: { "2027-01": 12_500 } });
-  assert.equal(plan.length, 10);
-  assert.equal(plan[0].label, "September");
+  assert.equal(plan.length, 11, "one registration-fee item plus ten months");
+  assert.equal(plan[0].label, "Registration fee");
+  assert.equal(plan[0].kind, "registration");
+  assert.equal(plan[0].amountDueAgorot, 20_000);
+  assert.equal(plan[1].label, "September");
+  assert.equal(plan[1].amountDueAgorot, 20_000, "September is a full monthly fee, not replaced by the registration fee");
   assert.equal(plan.find((period) => period.periodKey === "2027-01")?.amountDueAgorot, 12_500);
   assert.equal(plan.at(-1)?.label, "June");
 });

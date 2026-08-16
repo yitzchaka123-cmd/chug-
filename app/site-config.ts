@@ -18,7 +18,7 @@ export const choirConfig = {
       monthlyAmount: 200,
       juneAmount: 100,
       registrationFeeAmount: 200,
-      choirYearTotal: 1900,
+      choirYearTotal: 2100,
       securityCheckAmount: 1700,
       securityCheckMonths: "October–June",
       proofUpload: "required" as "required" | "optional",

@@ -78,7 +78,7 @@ export function personalizeAgreementSections(base: readonly AgreementSection[], 
   };
 
   return base.map((section) => {
-    if (section.title === "Schedule Terms") {
+    if (section.title === "Schedule" || section.title === "Schedule Terms") {
       return {
         title: section.title,
         paragraphs: section.paragraphs.map((paragraph) => {
@@ -99,20 +99,24 @@ export function personalizeAgreementSections(base: readonly AgreementSection[], 
       return { title: section.title, paragraphs: section.paragraphs.map((paragraph) => paragraph.id === "location" ? { ...paragraph, text: `Choir Chug sessions take place at ${pricing.location} - your daughter’s exact location arrives together with her group placement.` } : { ...paragraph }) };
     }
     if (section.title !== "Payment Terms") return { title: section.title, paragraphs: section.paragraphs.map((paragraph) => ({ ...paragraph })) };
-    const generatedIds = new Set(["payment-monthly", "payment-june", "payment-total", "payment-first-month", "payment-security-check", "payment-schedule", "payment-methods", "payment-private-arrangement"]);
+    const generatedIds = new Set(["payment-registration-fee", "payment-monthly", "payment-june", "payment-total", "payment-first-month", "payment-security-check", "payment-schedule", "payment-methods", "payment-private-arrangement"]);
     const preservedParagraphs = section.paragraphs.filter((paragraph) => !generatedIds.has(paragraph.id) && !["payment-cash", "payment-bank"].includes(paragraph.id)).map((paragraph) => ({ ...paragraph }));
     const customIntroduction = pricing.customLabel
       ? [{ id: "payment-private-arrangement", text: `This registration uses the private fee arrangement “${pricing.customLabel}”. The amounts shown below are the amounts that apply to this registration.` }]
+      : [];
+    const registrationFeeParagraphs = pricing.registrationFeeAgorot > 0
+      ? [{ id: "payment-registration-fee", text: `Registration fee: a one-time ${shekels(pricing.registrationFeeAgorot)}₪ that secures your daughter’s place. It is paid now, at registration, and is separate from the monthly fees below.` }]
       : [];
     return {
       title: section.title,
       paragraphs: [
         ...customIntroduction,
+        ...registrationFeeParagraphs,
         { id: "payment-monthly", text: `Monthly cost: ${shekels(pricing.monthlyFeeAgorot)}₪ per girl.` },
         { id: "payment-june", text: `June: ${shekels(pricing.juneFeeAgorot)}₪.` },
-        { id: "payment-total", text: `Total for this choir year’s payment schedule: ${shekels(totalAgorot)}₪ per girl.` },
-        { id: "payment-first-month", text: `The first payment is ${shekels(pricing.registrationFeeAgorot)}₪ - your trial month. From the second month, participation becomes a commitment for the rest of the choir year: it can no longer be cancelled, and the monthly payments continue through the end.` },
-        { id: "payment-security-check", text: `Alongside the monthly payments, we ask for one security check covering the ${pricing.securityCheckMonths} balance after the registration payment. The security check amount is ${shekels(pricing.securityCheckAgorot)}₪. It is a safety net only - never used unless an agreed payment stays unpaid, and we will always speak with you first.` },
+        { id: "payment-total", text: `Total for this choir year’s payment schedule: ${shekels(totalAgorot)}₪ per girl${pricing.registrationFeeAgorot > 0 ? ", including the registration fee" : ""}.` },
+        { id: "payment-first-month", text: "The first month of choir is your trial month. From the second month, participation becomes a commitment for the rest of the choir year: it can no longer be cancelled, and the monthly payments continue through the end. If your daughter misses a session by choice there is no refund or makeup, and if we ever need to move a session we will arrange a makeup when possible." },
+        { id: "payment-security-check", text: `Alongside the monthly payments, we ask for one security check covering the ${pricing.securityCheckMonths} balance. The security check amount is ${shekels(pricing.securityCheckAgorot)}₪. It is a safety net only - never used unless an agreed payment stays unpaid, and we will always speak with you first.` },
         { id: "payment-schedule", text: `Payment schedule: ${planSummary}.` },
         { id: "payment-methods", text: `Payment options:\n${methods}` },
         ...preservedParagraphs,

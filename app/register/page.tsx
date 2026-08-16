@@ -441,14 +441,13 @@ export default function RegistrationPreview() {
               } else {
                 setWizardIndex((index) => index + 1);
               }
-              window.scrollTo({ top: 0, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
             }
             return (
               <div className="form-section approval-wizard-shell">
-                <div className="form-section-title"><span>03</span><div><h2>Registration Agreement</h2><p>One short section at a time - read it, approve it, and move on. This exact wording appears in the document you sign.</p></div></div>
+                <div className="form-section-title"><span>03</span><div><h2>Registration</h2></div></div>
                 <div className="agreement-progress"><span style={{ width: `${((Math.min(wizardIndex, screens.length - 1) + 1) / screens.length) * 100}%` }} /></div>
-                <div className="approval-wizard" key={current.title}>
-                  <p className="wizard-count">{current.approvalIndex >= 0 ? `Section ${current.approvalIndex + 1} of ${activeApprovalSections.length}` : `Agreement version ${activeAgreementVersion}`}</p>
+                <div className={current.paragraphs.length > 3 ? "approval-wizard wizard-compact" : "approval-wizard"} key={current.title}>
+                  <p className="wizard-count">{current.approvalIndex >= 0 ? `Section ${current.approvalIndex + 1} of ${activeApprovalSections.length}` : `Version ${activeAgreementVersion}`}</p>
                   <h3>{current.title}</h3>
                   <div className="wizard-copy">{current.paragraphs.map((item) => <p key={item.id}>{item.text}</p>)}</div>
                   <div className="wizard-actions">
@@ -464,14 +463,15 @@ export default function RegistrationPreview() {
           {step === 3 && (
             <div className="form-section">
               <div className="form-section-title"><span>04</span><div><h2>Payment information</h2><p>Choose a method and add payment proof where applicable.</p></div></div>
-              <div className="payment-total monthly-payment"><span>Monthly choir payment</span><strong><bdi dir="ltr">₪{payment.monthlyAmount.toLocaleString("en-US")}</bdi><em>/month</em></strong><small>* June is <bdi dir="ltr">₪{payment.juneAmount.toLocaleString("en-US")}</bdi>{payment.registrationFeeAmount > 0 && <> · One-time registration fee <bdi dir="ltr">₪{payment.registrationFeeAmount.toLocaleString("en-US")}</bdi></>}</small></div>
+              {payment.registrationFeeAmount > 0 && <div className="payment-total registration-payment"><span>Registration fee, due now</span><strong><bdi dir="ltr">₪{payment.registrationFeeAmount.toLocaleString("en-US")}</bdi></strong><small>One time, secures her place. Separate from the monthly fees.</small></div>}
+              <div className="payment-total monthly-payment"><span>Monthly choir payment</span><strong><bdi dir="ltr">₪{payment.monthlyAmount.toLocaleString("en-US")}</bdi><em>/month</em></strong><small>September–May · June is <bdi dir="ltr">₪{payment.juneAmount.toLocaleString("en-US")}</bdi></small></div>
               <div className="payment-methods">
                 {paymentMethods.map((method) => <label className={form.method === method ? "selected" : ""} key={method}><input type="radio" name="payment" value={method} checked={form.method === method} onChange={(event) => { update("method", event.target.value); setProofName(""); setProofPreview(""); setProofFile(null); }} /><span>{method}</span></label>)}
               </div>
               {selectedMethod?.instructions && <p className="payment-method-note"><strong>{selectedMethod.label}:</strong> {selectedMethod.instructions}</p>}
               {paymentAllowsProof && (
                 <>
-                  <div className="upload-title"><span>Payment proof</span><small>{paymentRequiresProof ? "Required" : "Optional"} for {form.method}</small></div>
+                  <div className="upload-title"><span>Registration fee payment proof</span><small>{paymentRequiresProof ? "Required" : "Optional"} for {form.method}</small></div>
                   <label className={proofPreview ? "upload-box has-preview" : "upload-box"}><input type="file" accept="image/*" onChange={chooseProof} />{proofPreview ? <img className="upload-preview" src={proofPreview} alt="Selected payment screenshot preview" /> : <span className="upload-icon">↑</span>}<strong>{proofName || "Upload payment screenshot"}</strong><small>{proofPreview ? "Tap to replace this image" : "Choose a photo or take one with your phone"}</small></label>
                 </>
               )}

@@ -74,7 +74,11 @@ test("registration, custom pricing, schedules, PDFs, admin data and backups work
     const standard = await json(await request("/api/registration-config"));
     assert.equal(standard.year, "2026–2027");
     assert.equal(standard.amounts.monthly, 200);
-    assert.ok(standard.agreementSections.length > 8);
+    const sectionTitles = standard.agreementSections.map((section) => section.title);
+    assert.ok(standard.agreementSections.length >= 6, `unexpected agreement shape: ${sectionTitles.join(", ")}`);
+    assert.ok(sectionTitles.includes("Schedule"), "the schedule section is named Schedule");
+    assert.ok(sectionTitles.includes("General Information"), "the merged general section is present");
+    assert.ok(!sectionTitles.includes("Cancellations & Absences"));
     const cashMethod = standard.paymentMethodRecords.find((method) => method.code === "cash");
     assert.equal(cashMethod?.cashHandling, true, "the seeded cash method must carry the cash-handling flag");
 
@@ -179,6 +183,14 @@ test("registration, custom pricing, schedules, PDFs, admin data and backups work
     const detail = await json(await request(`/api/admin/registrations/${encodeURIComponent(testStudent.id)}`, { headers: adminHeaders }));
     assert.equal(detail.registration.proofStatus, "not_required", "cash registrations must not require payment proof");
     assert.equal(detail.registration.care?.allergies, "None", "decrypted medical details must reach the administrator");
+
+    const registrationItem = detail.payments.find((payment) => payment.periodKey.endsWith("-registration"));
+    assert.ok(registrationItem, "the payment ledger must carry a separate registration-fee item");
+    assert.equal(registrationItem.label, "Registration fee");
+    assert.equal(registrationItem.amountDue, 150, "the custom link's registration fee applies");
+    const september = detail.payments.find((payment) => payment.periodKey === "2026-09");
+    assert.ok(september, "September must still be charged as a normal month");
+    assert.equal(september.amountDue, 150, "the registration fee must not replace September's monthly fee");
 
     const searchHit = await json(await request(`/api/admin/registrations?yearId=${encodeURIComponent(yearId)}&q=Test%20Stu`, { headers: adminHeaders }));
     assert.equal(searchHit.students.some((student) => student.name === "Test Student"), true);

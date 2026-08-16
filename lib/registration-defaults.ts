@@ -4,8 +4,8 @@ import { parseAgreementSections } from "@/lib/agreement-content";
 import { sha256Hex } from "@/lib/security";
 
 export const CURRENT_SCHOOL_YEAR_ID = "school-year-2026-2027";
-export const CURRENT_AGREEMENT_ID = "agreement-2026-2027-v3";
-const PREVIOUS_DEFAULT_AGREEMENT_ID = "agreement-2026-2027-v2";
+export const CURRENT_AGREEMENT_ID = "agreement-2026-2027-v4";
+const PREVIOUS_DEFAULT_AGREEMENT_IDS = ["agreement-2026-2027-v2", "agreement-2026-2027-v3"];
 
 const CASH_REMINDER_TEXT = "Please be responsible for making sure that you pay the monthly amount on time by sending it with your daughter. Please don’t make us run after you for the monthly payment.";
 
@@ -118,16 +118,17 @@ export async function ensureSystemSeed(db: D1Database) {
       INSERT OR IGNORE INTO agreement_versions (
         id, school_year_id, version, title, sections_json,
         content_hash, is_active, effective_at, created_at
-      ) VALUES (?, ?, 3, ?, ?, ?, 1, ?, ?)
+      ) VALUES (?, ?, 4, ?, ?, ?, 1, ?, ?)
     `).bind(
       CURRENT_AGREEMENT_ID, CURRENT_SCHOOL_YEAR_ID,
       `Choir Chug Registration Agreement ${choirConfig.currentYear.label}`,
       sectionsJson, contentHash, now, now,
     ),
-    // Retire the old seeded default only while the new default is also active
+    // Retire the older seeded defaults only while the new default is also active
     // (the state right after an upgrade); an administrator who deliberately
-    // re-activates the old version through the Agreements tab is respected.
-    db.prepare(`UPDATE agreement_versions SET is_active = 0 WHERE id = ? AND is_active = 1 AND (SELECT is_active FROM agreement_versions WHERE id = ?) = 1`).bind(PREVIOUS_DEFAULT_AGREEMENT_ID, CURRENT_AGREEMENT_ID),
+    // re-activates an older version through the Agreements tab is respected.
+    ...PREVIOUS_DEFAULT_AGREEMENT_IDS.map((id) =>
+      db.prepare(`UPDATE agreement_versions SET is_active = 0 WHERE id = ? AND is_active = 1 AND (SELECT is_active FROM agreement_versions WHERE id = ?) = 1`).bind(id, CURRENT_AGREEMENT_ID)),
   ];
   for (const method of defaultMethods) {
     statements.push(db.prepare(`

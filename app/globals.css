@@ -1419,3 +1419,11 @@ h2 { font-size: clamp(2.5rem, 4.8vw, 4.5rem); line-height: 0.98; }
 .save-link-field { width: 100%; padding: 12px 14px; border: 1px solid #e5d3d7; border-radius: 12px; background: #fbf6f7; color: var(--wine-dark); font-size: 0.82rem; text-align: center; }
 .save-link-actions { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 16px; }
 .save-link-actions .button, .save-link-actions .secondary-button { width: 100%; justify-content: center; text-align: center; }
+
+/* Denser wizard screen for the consolidated General Information section */
+.approval-wizard.wizard-compact h3 { font-size: clamp(1.25rem, 3.4vw, 1.65rem); margin-bottom: 14px; }
+.approval-wizard.wizard-compact .wizard-copy p { font-size: 0.88rem; line-height: 1.55; margin-bottom: 11px; }
+
+/* Registration fee highlighted as the amount due at registration */
+.payment-total.registration-payment { border-color: rgba(143, 24, 56, 0.32); background: linear-gradient(150deg, #fbeef1, #fff); }
+.payment-total.registration-payment strong { color: var(--wine-dark); }
