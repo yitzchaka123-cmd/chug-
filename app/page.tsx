@@ -47,9 +47,10 @@ export default function Home() {
         const copyMorph = smoothstep(0.02, 0.22, progress);
         const copyExit = smoothstep(0.3, 0.46, progress);
         const photoExpand = smoothstep(0.18, 0.46, progress);
-        const photoDrift = smoothstep(0.46, 0.88, progress);
-        // The photo leaves with the panel instead of hanging on to the end.
-        const photoExit = smoothstep(0.86, 1, progress);
+        // The photo rises with the panel and stays put; the next section
+        // scrolling over it is what takes it off screen, so the hero never
+        // empties out into blank background.
+        const photoDrift = smoothstep(0.46, 1, progress);
         const panelTravel = smoothstep(0.44, 0.95, progress);
         const panelFadeIn = smoothstep(0.42, 0.52, progress);
         const panelFadeOut = smoothstep(0.9, 1, progress);
@@ -115,8 +116,8 @@ export default function Home() {
 
         setHeroPixels("--hero-photo-left", mix(startPhotoLeft, finalPhotoInsetX, photoExpand));
         setHeroPixels("--hero-photo-top", mix(startPhotoTop, finalPhotoTop, photoExpand));
-        setHeroPixels("--hero-photo-exit-y", -photoDrift * (stackedHero ? 24 : 38) - photoExit * viewportHeight * 0.52);
-        setHeroNumber("--hero-photo-opacity", 1 - photoExit);
+        setHeroPixels("--hero-photo-exit-y", -photoDrift * (stackedHero ? 38 : 58));
+        setHeroNumber("--hero-photo-opacity", 1);
         setHeroPixels("--hero-photo-width", mix(startPhotoWidth, finalPhotoWidth, photoExpand));
         setHeroPixels("--hero-photo-height", mix(startPhotoHeight, finalPhotoHeight, photoExpand));
         setHeroPixels("--hero-photo-radius", mix(stackedHero ? 28 : 48, stackedHero ? 24 : 40, photoExpand));
@@ -144,7 +145,7 @@ export default function Home() {
     const revealItems = document.querySelectorAll<HTMLElement>("[data-reveal]");
     const observer = new IntersectionObserver(
       (entries) => entries.forEach((entry) => entry.isIntersecting && entry.target.classList.add("is-visible")),
-      { threshold: 0.18, rootMargin: "0px 0px -7%" },
+      { threshold: 0.01, rootMargin: "0px 0px 14%" },
     );
     revealItems.forEach((item) => observer.observe(item));
 
