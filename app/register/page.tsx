@@ -405,8 +405,8 @@ export default function RegistrationPreview() {
           <p className="eyebrow">Registration received</p>
           <h1>Thank you, {form.mother || form.father || "Parent"}.</h1>
           <p>{form.daughter || "Your daughter"}’s registration and signed agreement have been saved.</p>
-          <div className="success-actions"><a className="button" href={downloadUrl} download>Download agreement</a>{scheduleUrl && <a className="secondary-button" href={scheduleUrl}>Open parent schedule</a>}<Link className="text-link" href="/">Return home</Link></div>
-          {scheduleUrl && <p>Your private schedule link is ready. Save it now; it will update automatically when group details and sessions are finalized.</p>}
+          <div className="success-actions"><a className="button" href={downloadUrl} download>Download agreement</a>{scheduleUrl && <a className="secondary-button" href={scheduleUrl}>Open choir schedule</a>}<Link className="text-link" href="/">Return home</Link></div>
+          {scheduleUrl && <p>Your private choir schedule link is ready. Save it now; it will update automatically when group details and sessions are finalized.</p>}
           <small>Please download a copy for your records.</small>
         </section>
       </main>

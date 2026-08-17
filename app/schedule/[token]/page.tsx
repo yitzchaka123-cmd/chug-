@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { holidaysForHebrewDate } from "@/lib/calendar";
+import { hebrewDayLetters, holidaysForHebrewDate } from "@/lib/calendar";
 import { candleLightingTime, shabbatEndTime } from "@/lib/zmanim";
 import { choirConfig } from "../../site-config";
 
@@ -26,7 +26,7 @@ function escapeHtml(value: string) {
   return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
 }
 
-export default function ParentSchedule({ params }: { params: Promise<{ token: string }> }) {
+export default function ChoirSchedule({ params }: { params: Promise<{ token: string }> }) {
   const [token, setToken] = useState("");
   const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [data, setData] = useState<ScheduleData | null>(null);
@@ -55,25 +55,25 @@ export default function ParentSchedule({ params }: { params: Promise<{ token: st
   const cells = useMemo(() => {
     const first = new Date(`${month}-01T12:00:00Z`);
     const count = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0)).getUTCDate();
-    const result: Array<{ key: string; date: string; day: number; weekday: number; hebrew: string; holidays: Array<{ en: string; he: string }>; shabbat: string; event?: ScheduleData["events"][number] }> = [];
-    for (let i = 0; i < first.getUTCDay(); i += 1) result.push({ key: `blank-${i}`, date: "", day: 0, weekday: i, hebrew: "", holidays: [], shabbat: "" });
+    const result: Array<{ key: string; date: string; day: number; weekday: number; hebrew: string; hebrewLetters: string; holidays: Array<{ en: string; he: string }>; candles: string; shabbatEnds: string; event?: ScheduleData["events"][number] }> = [];
+    for (let i = 0; i < first.getUTCDay(); i += 1) result.push({ key: `blank-${i}`, date: "", day: 0, weekday: i, hebrew: "", hebrewLetters: "", holidays: [], candles: "", shabbatEnds: "" });
     for (let day = 1; day <= count; day += 1) {
       const date = `${month}-${String(day).padStart(2, "0")}`;
       const moment = new Date(`${date}T12:00:00+03:00`);
       const weekday = new Date(`${date}T12:00:00Z`).getUTCDay();
       const parts = hebrewParts.formatToParts(moment);
-      const { jewish, israeli } = holidaysForHebrewDate(Number(parts.find((part) => part.type === "day")?.value || 0), parts.find((part) => part.type === "month")?.value || "");
-      let shabbat = "";
-      if (weekday === 5) { const candles = candleLightingTime(date); if (candles) shabbat = `🕯 ${candles}`; }
-      if (weekday === 6) { const ends = shabbatEndTime(date); shabbat = ends ? `Shabbat ends ${ends}` : "Shabbat"; }
+      const hebrewDay = Number(parts.find((part) => part.type === "day")?.value || 0);
+      const { jewish, israeli } = holidaysForHebrewDate(hebrewDay, parts.find((part) => part.type === "month")?.value || "");
       result.push({
         key: date,
         date,
         day,
         weekday,
         hebrew: hebrewShort.format(moment),
+        hebrewLetters: hebrewDayLetters(hebrewDay),
         holidays: [jewish, israeli].filter(Boolean) as Array<{ en: string; he: string }>,
-        shabbat,
+        candles: weekday === 5 ? candleLightingTime(date) || "" : "",
+        shabbatEnds: weekday === 6 ? shabbatEndTime(date) || "" : "",
         event: data?.events.find((event) => event.date === date),
       });
     }
@@ -186,14 +186,14 @@ export default function ParentSchedule({ params }: { params: Promise<{ token: st
   }
 
   return (
-    <main className="parent-schedule-shell">
-      <header className="parent-schedule-header"><Link href="/"><img src={choirConfig.brand.logo} alt="The Choir Chug" /></Link><span>Private parent schedule</span></header>
+    <main className="choir-schedule-shell">
+      <header className="choir-schedule-header"><Link href="/"><img src={choirConfig.brand.logo} alt="The Choir Chug" /></Link><span>Choir schedule</span></header>
       {error ? <section className="schedule-error"><h1>Schedule unavailable</h1><p>{error}</p><a href={`tel:+972535906149`}>Call {choirConfig.brand.phone}</a></section> : !data ? <section className="schedule-loading">Loading schedule…</section> : (
         <>
           <section className="schedule-hero"><p className="eyebrow">{data.year.name}</p><h1>{data.group?.name || "Group schedule"}</h1>{data.group ? <p>{[data.group.startTime && data.group.endTime ? `${data.group.startTime}–${data.group.endTime}` : "", data.group.location || ""].filter(Boolean).join(" · ")}</p> : <p>Your group schedule is being prepared. This same private link will update automatically after group placement.</p>}</section>
           <div className="schedule-body">
             <div className="schedule-main">
-              {data.group ? <section className="parent-calendar">
+              {data.group ? <section className="schedule-calendar">
                 <div className="calendar-toolbar"><button onClick={() => setMonth(addMonth(month, -1))} aria-label="Previous month">←</button><h2>{monthLabel}</h2><button onClick={() => setMonth(addMonth(month, 1))} aria-label="Next month">→</button></div>
                 <div className="calendar-weekdays">{["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => <span key={day}><b>{day.charAt(0)}</b><i>{day}</i></span>)}</div>
                 <div className="calendar-grid">{cells.map((cell) => {
@@ -203,18 +203,23 @@ export default function ParentSchedule({ params }: { params: Promise<{ token: st
                   if (cell.event) classes.push(cancelled ? "is-cancelled" : "has-event");
                   if (cell.weekday === 6) classes.push("is-shabbat");
                   if (cell.date === today) classes.push("is-today");
+                  if (cell.holidays.length) classes.push("is-holiday");
                   return <article key={cell.key} className={classes.join(" ")}>
-                    <header><strong>{cell.day}</strong><span lang="he" dir="rtl">{cell.hebrew}</span></header>
+                    <header><strong>{cell.day}</strong><span lang="he" dir="rtl"><i className="cell-wide">{cell.hebrew}</i><i className="cell-narrow">{cell.hebrewLetters}</i></span></header>
                     <div className="calendar-cell-body">
-                      {cell.event && (cancelled ? <p className="cell-session cancelled">No choir</p> : <p className="cell-session"><b>{cell.event.starts_at.slice(11, 16)}</b>{cell.event.ends_at && <i>until {cell.event.ends_at.slice(11, 16)}</i>}<span>{cell.event.title_en}</span></p>)}
+                      {cell.event && (cancelled
+                        ? <p className="cell-session cancelled"><i className="cell-wide">No choir</i><i className="cell-narrow">off</i></p>
+                        : <p className="cell-session"><b>{cell.event.starts_at.slice(11, 16)}</b>{cell.event.ends_at && <i className="cell-until">until {cell.event.ends_at.slice(11, 16)}</i>}<span>{cell.event.title_en}</span></p>)}
                       {cell.holidays.map((holiday) => <p key={holiday.en} className="cell-holiday">{holiday.en}</p>)}
-                      {cell.shabbat && <p className="cell-shabbat">{cell.shabbat}</p>}
+                      {cell.candles && <p className="cell-shabbat"><i className="cell-wide">🕯 {cell.candles}</i><i className="cell-narrow">🕯{cell.candles}</i></p>}
+                      {cell.shabbatEnds && <p className="cell-shabbat"><i className="cell-wide">Shabbat ends {cell.shabbatEnds}</i><i className="cell-narrow">★{cell.shabbatEnds}</i></p>}
                       {cell.event?.note && <p className="cell-note">{cell.event.note}</p>}
                     </div>
+                    {cell.holidays.length > 0 && <footer className="cell-flag">{cell.holidays[0].en}</footer>}
                   </article>;
                 })}</div>
-                <p className="calendar-legend"><span className="legend-dot" /> Choir session · candle lighting and Shabbat end times are for Beit Shemesh.</p>
-              </section> : <section className="parent-calendar calendar-pending"><h2>Calendar coming soon</h2><p>Your daughter&rsquo;s group has not been set yet. The calendar appears here as soon as she is placed - this same link keeps working.</p></section>}
+                <p className="calendar-legend"><span className="legend-dot" /> Choir session · 🕯 candle lighting and ★ Shabbat end times for Beit Shemesh · a wine bar marks a holiday.</p>
+              </section> : <section className="schedule-calendar calendar-pending"><h2>Calendar coming soon</h2><p>Your daughter&rsquo;s group has not been set yet. The calendar appears here as soon as she is placed - this same link keeps working.</p></section>}
             </div>
             <aside className="schedule-side">
               <section className="schedule-updates">
@@ -235,7 +240,7 @@ export default function ParentSchedule({ params }: { params: Promise<{ token: st
           </div>
         </>
       )}
-      <footer className="parent-schedule-footer"><span>Schedule changes appear here live.</span><a href={`tel:+972535906149`}>{choirConfig.brand.phone}</a></footer>
+      <footer className="choir-schedule-footer"><span>Schedule changes appear here live.</span><a href={`tel:+972535906149`}>{choirConfig.brand.phone}</a></footer>
     </main>
   );
 }

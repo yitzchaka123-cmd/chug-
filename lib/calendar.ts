@@ -85,6 +85,19 @@ export function holidaysForHebrewDate(day: number, month: string): { jewish: Hol
   return { jewish, israeli: israeliHolidays[`${month}-${day}`] || null };
 }
 
+// The Hebrew day written the way it is normally written, as letters rather than
+// digits. Intl can only produce these through the nu-hebr numbering system, which
+// is not present in every runtime, so the 30 values are listed here instead.
+const hebrewDayLetterList = [
+  "", "א", "ב", "ג", "ד", "ה", "ו", "ז", "ח", "ט", "י",
+  "יא", "יב", "יג", "יד", "טו", "טז", "יז", "יח", "יט", "כ",
+  "כא", "כב", "כג", "כד", "כה", "כו", "כז", "כח", "כט", "ל",
+];
+
+export function hebrewDayLetters(day: number) {
+  return hebrewDayLetterList[day] || String(day || "");
+}
+
 export function dateOnly(value: Date) {
   const year = value.getUTCFullYear();
   const month = String(value.getUTCMonth() + 1).padStart(2, "0");
