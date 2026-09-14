@@ -1,4 +1,5 @@
 import { requireAdminSession } from "@/lib/admin-auth";
+import { formatWeekdays } from "@/lib/available-days";
 import { getRuntimeEnv } from "@/lib/runtime-env";
 import { decryptJson, encryptJson } from "@/lib/security";
 
@@ -14,6 +15,7 @@ type RegistrationDetailRow = {
   mother_phone: string | null;
   mother_email: string | null;
   payment_method: string | null;
+  available_weekdays: string | null;
   medical_information_ciphertext: string | null;
   review_status: string;
   payment_proof_status: string;
@@ -43,7 +45,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     const { id } = await context.params;
     const registration = await runtime.DB.prepare(`
       SELECT r.id, r.participant_full_name, r.participant_birth_date, r.father_name, r.father_phone,
-        r.mother_name, r.mother_phone, r.mother_email, r.payment_method, r.medical_information_ciphertext,
+        r.mother_name, r.mother_phone, r.mother_email, r.payment_method, r.available_weekdays, r.medical_information_ciphertext,
         r.review_status, r.payment_proof_status, s.id AS student_id, s.status AS student_status,
         s.private_notes_ciphertext, e.id AS enrollment_id, e.group_id, e.group_label
       FROM registrations r
@@ -79,6 +81,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
           email: registration.mother_email,
         },
         paymentMethod: registration.payment_method,
+        availableDays: formatWeekdays(registration.available_weekdays, "long"),
         reviewStatus: registration.review_status,
         proofStatus: registration.payment_proof_status,
         studentId: registration.student_id,

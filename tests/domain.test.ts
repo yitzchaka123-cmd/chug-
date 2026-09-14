@@ -60,7 +60,11 @@ test("school-year settings flow into schedule agreement wording", () => {
   const all = sections.flatMap((section) => section.paragraphs).map((paragraph) => paragraph.text).join("\n");
   assert.match(all, /2027–2028 school year/);
   assert.match(all, /55 minutes/);
-  assert.match(all, /Tuesdays between 4:30 p\.m\. and 6:30 p\.m\./);
+  assert.match(all, /at a set time between 4:30 p\.m\. and 6:30 p\.m\./);
+  // The day is chosen from family availability after registration, so the
+  // signed agreement must not promise one.
+  assert.doesNotMatch(all, /Tuesdays?\b/);
+  assert.match(all, /day of the week is chosen after registration/);
   assert.match(all, /at Studio A/);
 });
 

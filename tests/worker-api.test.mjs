@@ -7,7 +7,7 @@ import { Miniflare } from "miniflare";
 
 const projectRoot = fileURLToPath(new URL("../", import.meta.url));
 const publicRoot = join(projectRoot, "public");
-const migrations = ["0000_fat_wilson_fisk.sql", "0001_calm_scarecrow.sql", "0002_sharp_skaar.sql", "0003_crazy_cammi.sql", "0004_flippant_major_mapleleaf.sql"];
+const migrations = ["0000_fat_wilson_fisk.sql", "0001_calm_scarecrow.sql", "0002_sharp_skaar.sql", "0003_crazy_cammi.sql", "0004_flippant_major_mapleleaf.sql", "0005_mushy_the_phantom.sql"];
 const mimeTypes = new Map([[".png", "image/png"], [".jpg", "image/jpeg"], [".jpeg", "image/jpeg"], [".ttf", "font/ttf"], [".svg", "image/svg+xml"]]);
 
 async function staticAsset(request) {
@@ -151,6 +151,7 @@ test("registration, custom pricing, schedules, PDFs, admin data and backups work
     const formData = new FormData();
     formData.set("payload", JSON.stringify({
       form: fakeForm,
+      availableDays: ["wed", "sun", "tue"],
       approvals: customConfig.agreementSections.filter((section) => section.title !== "Introduction").map((section) => ({ sectionTitle: section.title, understood: true })),
       agreementVersion: customConfig.agreementVersion,
       offerToken,
@@ -163,6 +164,13 @@ test("registration, custom pricing, schedules, PDFs, admin data and backups work
       signatureData,
       draftToken: draft.token,
     }));
+    const noDaysForm = new FormData();
+    for (const [key, entry] of formData.entries()) noDaysForm.set(key, entry);
+    noDaysForm.set("payload", JSON.stringify({ ...JSON.parse(formData.get("payload")), availableDays: [] }));
+    const encodedNoDays = new Response(noDaysForm);
+    const refusedNoDays = await request("/api/registrations/submit", { method: "POST", headers: { "Content-Type": encodedNoDays.headers.get("content-type") }, body: await encodedNoDays.arrayBuffer() });
+    assert.equal(refusedNoDays.status, 400, "a registration must name at least one day that could work");
+
     const encodedForm = new Response(formData);
     const submitted = await json(await request("/api/registrations/submit", {
       method: "POST",
@@ -221,6 +229,16 @@ test("registration, custom pricing, schedules, PDFs, admin data and backups work
     const september = detail.payments.find((payment) => payment.periodKey === "2026-09");
     assert.ok(september, "September must still be charged as a normal month");
     assert.equal(september.amountDue, 150, "the registration fee must not replace September's monthly fee");
+
+    assert.equal(detail.registration.availableDays, "Sunday, Tuesday, Wednesday", "the drawer shows the days in week order, not the order they were tapped");
+    const placement = await json(await request(`/api/admin/groups?yearId=${encodeURIComponent(yearId)}`, { headers: adminHeaders }));
+    assert.equal(placement.dayAvailability.answered, 1, "completed registrations are counted for the best-day tally");
+    const wednesday = placement.dayAvailability.days.find((day) => day.key === "wed");
+    const monday = placement.dayAvailability.days.find((day) => day.key === "mon");
+    assert.equal(wednesday.count, 1, "Wednesday was chosen by the registered family");
+    assert.equal(monday.count, 0, "Monday was not chosen");
+    assert.deepEqual(monday.missing, ["Test Student"], "the tally names who cannot make a day");
+    assert.equal(placement.dayAvailability.days.some((day) => day.key === "fri" || day.key === "sat"), false, "Friday and Saturday are never offered");
 
     const searchHit = await json(await request(`/api/admin/registrations?yearId=${encodeURIComponent(yearId)}&q=Test%20Stu`, { headers: adminHeaders }));
     assert.equal(searchHit.students.some((student) => student.name === "Test Student"), true);

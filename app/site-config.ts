@@ -7,9 +7,10 @@ export const choirConfig = {
   },
   currentYear: {
     label: "2026–2027",
-    day: "Wednesdays",
-    sessionLength: "50 minutes",
-    timeWindow: "Between 5:00–7:00 p.m.",
+    day: "To be determined",
+    dayNote: "Chosen after registration, based on the days that work for the most families.",
+    sessionLength: "50 minutes, between 5:00 and 7:00 p.m.",
+    scheduleNote: "Each group meets for 50 minutes at a set time between 5:00 and 7:00 p.m. The day and the exact time are confirmed once registration closes and the groups are arranged by age.",
     dates: "September 2026–June 15, 2027",
     location: "Mishkafayim or RBSA",
     monthlyFee: "₪200",

@@ -4,8 +4,8 @@ import { parseAgreementSections } from "@/lib/agreement-content";
 import { sha256Hex } from "@/lib/security";
 
 export const CURRENT_SCHOOL_YEAR_ID = "school-year-2026-2027";
-export const CURRENT_AGREEMENT_ID = "agreement-2026-2027-v4";
-const PREVIOUS_DEFAULT_AGREEMENT_IDS = ["agreement-2026-2027-v2", "agreement-2026-2027-v3"];
+export const CURRENT_AGREEMENT_ID = "agreement-2026-2027-v5";
+const PREVIOUS_DEFAULT_AGREEMENT_IDS = ["agreement-2026-2027-v2", "agreement-2026-2027-v3", "agreement-2026-2027-v4"];
 
 const CASH_REMINDER_TEXT = "Please be responsible for making sure that you pay the monthly amount on time by sending it with your daughter. Please don’t make us run after you for the monthly payment.";
 
@@ -74,7 +74,7 @@ function defaultSettingsJson() {
     cashReminderText: CASH_REMINDER_TEXT,
     securityCheckAgorot: choirConfig.currentYear.payment.securityCheckAmount * 100,
     securityCheckMonths: choirConfig.currentYear.payment.securityCheckMonths,
-    timeWindow: choirConfig.currentYear.timeWindow,
+    scheduleNote: choirConfig.currentYear.scheduleNote,
     location: choirConfig.currentYear.location,
     sessionLengthMinutes: 50,
     paymentDueDay: 20,

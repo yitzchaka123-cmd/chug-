@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { ChangeEvent, PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import { agreementSections, approvalAgreementSections, agreementVersion, type AgreementSection } from "../agreement-2026-2027";
+import { availableDayOptions } from "@/lib/available-days";
 import { choirConfig } from "../site-config";
 
-const steps = ["Details", "Care", "Agreement", "Payment", "Review & sign"];
+const steps = ["Details", "Care", "Agreement", "Days", "Payment", "Review & sign"];
 
 function friendlyError(error: unknown, fallback: string) {
   const message = error instanceof Error ? error.message : "";
@@ -76,6 +77,7 @@ export default function RegistrationPreview() {
     method: "Bank transfer",
     signer: "",
   });
+  const [availableDays, setAvailableDays] = useState<string[]>([]);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawing = useRef(false);
@@ -113,7 +115,7 @@ export default function RegistrationPreview() {
       if (settings.customOffer?.label) setCustomOfferLabel(settings.customOffer.label);
       setHomeAddressEnabled(settings.homeAddressEnabled === true);
       setSchoolEnabled(settings.schoolEnabled === true);
-      if (settings.schedule) setScheduleInfo({ sessionLength: `${settings.schedule.sessionLengthMinutes || 50} minutes`, location: settings.schedule.location || choirConfig.currentYear.location, day: ["Sundays", "Mondays", "Tuesdays", "Wednesdays", "Thursdays", "Fridays", "Saturdays"][settings.schedule.weekday ?? 3] || "Wednesdays" });
+      if (settings.schedule) setScheduleInfo({ sessionLength: `${settings.schedule.sessionLengthMinutes || 50} minutes`, location: settings.schedule.location || choirConfig.currentYear.location, day: choirConfig.currentYear.day });
       if (typeof settings.proofUploadRequired === "boolean") setProofUploadRequired(settings.proofUploadRequired);
       if (settings.cashReminderText) setCashReminderText(settings.cashReminderText);
       if (Array.isArray(settings.paymentMethodRecords)) setPaymentMethodRecords(settings.paymentMethodRecords.map((record) => ({ ...record, cashHandling: record.cashHandling === true })));
@@ -157,7 +159,8 @@ export default function RegistrationPreview() {
       if (draft) {
         const data = draft.data;
         if (data.form && typeof data.form === "object") setForm((current) => ({ ...current, ...(data.form as Partial<typeof current>) }));
-        if (typeof data.step === "number") setStep(Math.min(4, Math.max(0, Math.floor(data.step))));
+        if (typeof data.step === "number") setStep(Math.min(5, Math.max(0, Math.floor(data.step))));
+        if (Array.isArray(data.availableDays)) setAvailableDays((data.availableDays as unknown[]).filter((day): day is string => typeof day === "string"));
         if (Array.isArray(data.approvals)) setApprovals(data.approvals.map(Boolean));
         if (typeof data.securityCheckAccepted === "boolean") setSecurityCheckAccepted(data.securityCheckAccepted);
         setFinalConsent(data.guardianAccepted === true && data.privacyAccepted === true && data.electronicSignatureAccepted === true);
@@ -265,11 +268,13 @@ export default function RegistrationPreview() {
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim()),
   );
   const careComplete = Boolean(form.emergencyName.trim() && form.emergencyPhone.trim() && form.emergencyRelation.trim());
+  const daysComplete = availableDays.length > 0;
   const canContinue =
     (step !== 0 || detailsComplete) &&
     (step !== 1 || careComplete) &&
     (step !== 2 || approvals.every(Boolean)) &&
-    (step !== 3 || (securityCheckAccepted && (!paymentRequiresProof || Boolean(proofName))));
+    (step !== 3 || daysComplete) &&
+    (step !== 4 || (securityCheckAccepted && (!paymentRequiresProof || Boolean(proofName))));
   // Anything still missing from an earlier part of the form. Uploads in
   // particular cannot be kept when progress is saved, so a parent who returns
   // to a saved registration has to pick the screenshot again.
@@ -277,8 +282,9 @@ export default function RegistrationPreview() {
     if (!detailsComplete) return { step: 0, message: "Please finish the participant and parent details before signing." };
     if (!careComplete) return { step: 1, message: "Please complete the emergency contact details before signing." };
     if (!approvals.length || !approvals.every(Boolean)) return { step: 2, message: "Please approve each part of the registration before signing." };
-    if (!securityCheckAccepted) return { step: 3, message: "Please confirm the security check on the payment step before signing." };
-    if (paymentRequiresProof && !proofFile && !savedProof) return { step: 3, message: `Please choose the ${paymentLabel} screenshot again - uploads are not kept when you save your progress.` };
+    if (!daysComplete) return { step: 3, message: "Please choose at least one day that could work for your daughter before signing." };
+    if (!securityCheckAccepted) return { step: 4, message: "Please confirm the security check on the payment step before signing." };
+    if (paymentRequiresProof && !proofFile && !savedProof) return { step: 4, message: `Please choose the ${paymentLabel} screenshot again - uploads are not kept when you save your progress.` };
     return null;
   })();
   const canComplete = Boolean(signatureData) && form.signer.trim().length > 1 && finalConsent;
@@ -287,7 +293,7 @@ export default function RegistrationPreview() {
     setSubmissionError(missingStep.message);
     setStep(missingStep.step);
   }
-  const wideStep = step === 2 || step === 4;
+  const wideStep = step === 2 || step === 5;
   const signingDate = useMemo(() => new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Jerusalem" }).format(new Date()), []);
 
   function chooseProof(event: ChangeEvent<HTMLInputElement>) {
@@ -312,7 +318,7 @@ export default function RegistrationPreview() {
 
   function goForward() {
     if (!canContinue) return;
-    if (step === 3 && isCashMethod) {
+    if (step === 4 && isCashMethod) {
       setCashReminderOpen(true);
       return;
     }
@@ -329,6 +335,7 @@ export default function RegistrationPreview() {
       const body = new FormData();
       body.set("payload", JSON.stringify({
         form,
+        availableDays,
         approvals: activeApprovalSections.map((section, index) => ({ sectionTitle: section.title, understood: approvals[index] })),
         agreementVersion: activeAgreementVersion,
         offerToken: offerToken || undefined,
@@ -364,7 +371,7 @@ export default function RegistrationPreview() {
     try {
       const draftPayload = JSON.stringify({
         token: draftToken || undefined,
-        data: { form, step, approvals, securityCheckAccepted, medicalConsent: finalConsent, guardianAccepted: finalConsent, privacyAccepted: finalConsent, electronicSignatureAccepted: finalConsent, offerToken: offerToken || null },
+        data: { form, step, availableDays, approvals, securityCheckAccepted, medicalConsent: finalConsent, guardianAccepted: finalConsent, privacyAccepted: finalConsent, electronicSignatureAccepted: finalConsent, offerToken: offerToken || null },
       });
       let response: Response;
       if (proofFile) {
@@ -509,7 +516,27 @@ export default function RegistrationPreview() {
 
           {step === 3 && (
             <div className="form-section">
-              <div className="form-section-title"><span>04</span><div><h2>Payment information</h2><p>Choose how you’ll pay, then add a screenshot of the registration fee where it applies.</p></div></div>
+              <div className="form-section-title"><span>04</span><div><h2>Days that could work</h2><p>Help us find the day that suits the most girls.</p></div></div>
+              <fieldset className="day-choice">
+                <legend>Which days could work for your daughter?</legend>
+                <p className="day-choice-help">Please select every day that could possibly work. The more days you mark, the better the chance we find one day that works for as many girls as possible. We will do our best to choose the day that suits the most families, and we will keep you updated once the groups are finalized.</p>
+                <div className="day-choice-grid">
+                  {availableDayOptions.map((option) => {
+                    const chosen = availableDays.includes(option.key);
+                    return <label key={option.key} className={chosen ? "selected" : ""}>
+                      <input type="checkbox" checked={chosen} onChange={() => setAvailableDays((current) => current.includes(option.key) ? current.filter((day) => day !== option.key) : [...current, option.key])} />
+                      <span>{option.label}</span>
+                    </label>;
+                  })}
+                </div>
+                <p className="day-choice-count">{availableDays.length === 0 ? "Please choose at least one day to continue." : availableDays.length === 1 ? "1 day selected." : `${availableDays.length} days selected.`}</p>
+              </fieldset>
+            </div>
+          )}
+
+          {step === 4 && (
+            <div className="form-section">
+              <div className="form-section-title"><span>05</span><div><h2>Payment information</h2><p>Choose how you’ll pay, then add a screenshot of the registration fee where it applies.</p></div></div>
               {payment.registrationFeeAmount > 0 && <div className="payment-total registration-payment"><span>Registration fee, due now</span><strong><bdi dir="ltr">₪{payment.registrationFeeAmount.toLocaleString("en-US")}</bdi></strong><small>One time, secures her place. Separate from the monthly fees.</small></div>}
               <div className="payment-total monthly-payment"><span>Monthly choir payment</span><strong><bdi dir="ltr">₪{payment.monthlyAmount.toLocaleString("en-US")}</bdi><em>/month</em></strong><small>September–May · June is <bdi dir="ltr">₪{payment.juneAmount.toLocaleString("en-US")}</bdi></small></div>
               <div className="payment-methods">
@@ -532,9 +559,9 @@ export default function RegistrationPreview() {
             </div>
           )}
 
-          {step === 4 && (
+          {step === 5 && (
             <div className="form-section">
-              <div className="form-section-title"><span>05</span><div><h2>Review & sign</h2><p>Review the exact agreement you approved, then add the parent’s signature.</p></div></div>
+              <div className="form-section-title"><span>06</span><div><h2>Review & sign</h2><p>Review the exact agreement you approved, then add the parent’s signature.</p></div></div>
               {missingStep && <aside className="missing-step-notice" role="alert"><div><strong>One thing left</strong><p>{missingStep.message}</p></div><button type="button" onClick={goFixMissing}>Take me there</button></aside>}
               <div className="document-toolbar"><span>A4 agreement preview · {activeAgreementVersion}</span><button type="button" onClick={() => setStep(2)}>← Return to agreement approvals</button></div>
               <div className="document-preview a4-contract">

@@ -24,14 +24,14 @@ export const agreementSections: readonly AgreementSection[] = [
   {
     title: "Schedule",
     paragraphs: [
-      { id: "schedule-calendar", text: "We follow the Israeli public school calendar for the 2026–2027 school year: choir meets every Wednesday that school is in session, from September 2026 until June 15, 2027 (no regular sessions after that date)." },
-      { id: "schedule-school-closure", text: "If there is no school on a Wednesday - including a last-minute closure for any reason, security situations included - there is no choir that day. Individual cancelled sessions are not refunded, and the monthly fee stays the same as long as at least one session takes place that month. If a whole calendar month passes with no sessions at all, that month is simply free." },
+      { id: "schedule-calendar", text: "We follow the Israeli public school calendar for the 2026–2027 school year: choir meets every week that school is in session, from September 2026 until June 15, 2027 (no regular sessions after that date)." },
+      { id: "schedule-school-closure", text: "If there is no school on the choir day - including a last-minute closure for any reason, security situations included - there is no choir that day. Individual cancelled sessions are not refunded, and the monthly fee stays the same as long as at least one session takes place that month. If a whole calendar month passes with no sessions at all, that month is simply free." },
     ],
   },
   {
     title: "Session Length & Group Times",
     paragraphs: [
-      { id: "schedule-length-groups", text: "Sessions are 50 minutes, on Wednesdays between 5:00 p.m. and 7:00 p.m. We share each group’s exact time once registration closes, so the girls land in the groups that fit their ages best. We can’t wait to open with a wonderful group of girls, b’ezrat Hashem - and in the unlikely case we do not reach the minimum number needed to run the program this year, every payment is returned in full." },
+      { id: "schedule-length-groups", text: "Sessions are 50 minutes, at a set time between 5:00 p.m. and 7:00 p.m. The day of the week is chosen after registration, based on the days families told us can work, and each group’s exact day and time are shared once the groups are arranged by age. We can’t wait to open with a wonderful group of girls, b’ezrat Hashem - and in the unlikely case we do not reach the minimum number needed to run the program this year, every payment is returned in full." },
     ],
   },
   {
@@ -78,4 +78,4 @@ export const agreementParagraphs = agreementSections.flatMap((section) =>
 
 export const approvalAgreementSections = agreementSections.filter((section) => section.title !== "Introduction");
 
-export const agreementVersion = "2026-2027-v4";
+export const agreementVersion = "2026-2027-v5";

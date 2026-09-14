@@ -480,6 +480,10 @@ ALTER TABLE "payment_methods" ADD COLUMN IF NOT EXISTS "cash_handling" integer D
 
 -- statement-breakpoint;
 
+ALTER TABLE "registrations" ADD COLUMN IF NOT EXISTS "available_weekdays" text DEFAULT '' NOT NULL;
+
+-- statement-breakpoint;
+
 ALTER TABLE "admin_sessions" ADD CONSTRAINT "admin_sessions_admin_user_id_fk" FOREIGN KEY ("admin_user_id") REFERENCES "admin_users"("id") ON UPDATE NO ACTION ON DELETE CASCADE;
 
 -- statement-breakpoint;

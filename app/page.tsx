@@ -269,16 +269,15 @@ export default function Home() {
           <div className="program-intro">
             <p className="eyebrow">The {choirConfig.currentYear.label} year</p>
             <h2>A consistent weekly program.</h2>
-            <p>Final group times will be shared once registration is complete and the groups are arranged by age.</p>
           </div>
           <dl className="fact-grid">
-            <div><dt>Day</dt><dd>{choirConfig.currentYear.day}</dd></div>
+            <div><dt>Day</dt><dd>{choirConfig.currentYear.day}</dd><small>{choirConfig.currentYear.dayNote}</small></div>
             <div><dt>Session</dt><dd>{choirConfig.currentYear.sessionLength}</dd></div>
-            <div><dt>Time window</dt><dd>{choirConfig.currentYear.timeWindow}</dd></div>
             <div><dt>Choir year</dt><dd>{choirConfig.currentYear.dates}</dd></div>
             <div><dt>Location</dt><dd>{choirConfig.currentYear.location}</dd></div>
             <div><dt>Monthly fee</dt><dd>{choirConfig.currentYear.monthlyFee}</dd></div>
           </dl>
+          <p className="fact-grid-note">{choirConfig.currentYear.scheduleNote}</p>
         </div>
       </section>
 

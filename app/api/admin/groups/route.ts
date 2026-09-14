@@ -1,4 +1,5 @@
 import { requireAdminSession } from "@/lib/admin-auth";
+import { availableDayOptions, normalizeWeekdays } from "@/lib/available-days";
 import { createPrivateLinkToken, revealPrivateLinkToken } from "@/lib/private-links";
 import { ensureSystemSeed } from "@/lib/registration-defaults";
 import { getRuntimeEnv } from "@/lib/runtime-env";
@@ -48,7 +49,28 @@ export async function GET(request: Request) {
       WHERE e.school_year_id = ? AND e.status = 'active' AND e.group_id IS NULL
       ORDER BY s.full_name
     `).bind(yearId).all<{ enrollment_id: string; student_id: string; full_name: string; birth_date: string | null }>() : { results: [] };
-    return Response.json({ groups, unassigned: unassigned.results.map((row) => ({ enrollmentId: row.enrollment_id, studentId: row.student_id, name: row.full_name, birthDate: row.birth_date })) }, { headers: { "Cache-Control": "private, no-store" } });
+    // Which day suits the most girls, counted from completed registrations only -
+    // an unfinished draft is not a family's answer yet.
+    const answers = yearId ? await runtime.DB.prepare(`
+      SELECT participant_full_name, available_weekdays, status
+      FROM registrations WHERE school_year_id = ? AND status != 'draft'
+      ORDER BY participant_full_name
+    `).bind(yearId).all<{ participant_full_name: string; available_weekdays: string | null; status: string }>() : { results: [] };
+    const drafts = yearId ? await runtime.DB.prepare(`SELECT COUNT(*) AS count FROM registrations WHERE school_year_id = ? AND status = 'draft'`).bind(yearId).first<{ count: number }>() : { count: 0 };
+    const answered = answers.results.map((row) => ({ name: row.participant_full_name, days: normalizeWeekdays(row.available_weekdays).split(",").filter(Boolean) }));
+    const counted = answered.filter((row) => row.days.length > 0);
+    const dayAvailability = {
+      answered: counted.length,
+      notAnswered: answered.length - counted.length,
+      unfinishedDrafts: Number(drafts?.count || 0),
+      days: availableDayOptions.map((option) => ({
+        key: option.key,
+        label: option.label,
+        count: counted.filter((row) => row.days.includes(option.key)).length,
+        missing: counted.filter((row) => !row.days.includes(option.key)).map((row) => row.name),
+      })),
+    };
+    return Response.json({ groups, dayAvailability, unassigned: unassigned.results.map((row) => ({ enrollmentId: row.enrollment_id, studentId: row.student_id, name: row.full_name, birthDate: row.birth_date })) }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "Groups could not be loaded." }, { status: 500 });
   }

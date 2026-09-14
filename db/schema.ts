@@ -84,6 +84,9 @@ export const registrations = sqliteTable(
     medicalInformationCiphertext: text("medical_information_ciphertext"),
     medicalInformationIv: text("medical_information_iv"),
     paymentMethod: text("payment_method"),
+    // Comma-separated weekday keys the family said could work, e.g. "sun,tue,wed".
+    // Stored as its own column so the administrator can tally the whole year in SQL.
+    availableWeekdays: text("available_weekdays").notNull().default(""),
     registrationFeeAgorot: integer("registration_fee_agorot").notNull().default(0),
     monthlyFeeAgorot: integer("monthly_fee_agorot").notNull().default(0),
     juneFeeAgorot: integer("june_fee_agorot").notNull().default(0),

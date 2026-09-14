@@ -181,6 +181,8 @@ h2 { font-size: clamp(2.5rem, 4.8vw, 4.5rem); line-height: 0.98; }
 .fact-grid div { min-height: 120px; padding: 25px; background: white; }
 .fact-grid dt { color: #9f7d86; font-size: 0.66rem; font-weight: 740; letter-spacing: 0.12em; text-transform: uppercase; }
 .fact-grid dd { margin: 22px 0 0; color: var(--wine-dark); font-family: Georgia, serif; font-size: 1.18rem; }
+.fact-grid small { display: block; margin: 9px 0 0; color: var(--muted); font-size: 0.72rem; line-height: 1.5; }
+.fact-grid-note { max-width: 760px; margin: 20px 0 0; color: var(--muted); font-size: 0.82rem; line-height: 1.65; }
 
 .journey { padding-top: 60px; padding-bottom: 140px; }
 .journey-grid { display: grid; grid-template-columns: repeat(3, 1fr); margin-top: 62px; }
@@ -856,6 +858,15 @@ h2 { font-size: clamp(2.5rem, 4.8vw, 4.5rem); line-height: 0.98; }
 .payment-methods label { min-height: 70px; display: grid; place-items: center; border: 1px solid #dfd1d5; border-radius: 13px; color: #705d64; cursor: pointer; font-size: .72rem; font-weight: 700; text-align: center; }
 .payment-methods label.selected { border: 2px solid var(--wine); background: #fff7f8; color: var(--wine); }
 .payment-methods input { position: absolute; opacity: 0; }
+.day-choice { margin: 6px 0 0; padding: 0; border: 0; }
+.day-choice legend { padding: 0; color: var(--wine-dark); font-family: Georgia, serif; font-size: 1.32rem; font-weight: 500; letter-spacing: -.02em; }
+.day-choice-help { max-width: 62ch; margin: 12px 0 0; color: var(--muted); font-size: .88rem; line-height: 1.65; }
+.day-choice-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 9px; margin: 22px 0 0; }
+.day-choice-grid label { position: relative; min-height: 74px; display: grid; place-items: center; padding: 6px; border: 1px solid #dfd1d5; border-radius: 13px; color: #705d64; cursor: pointer; font-size: .76rem; font-weight: 700; text-align: center; }
+.day-choice-grid label.selected { border: 2px solid var(--wine); background: #fff7f8; color: var(--wine); }
+.day-choice-grid label:focus-within { outline: 2px solid var(--wine); outline-offset: 2px; }
+.day-choice-grid input { position: absolute; opacity: 0; }
+.day-choice-count { margin: 14px 0 0; color: var(--muted); font-size: .8rem; font-weight: 640; }
 .upload-box { min-height: 190px; display: flex; flex-direction: column; align-items: center; justify-content: center; border: 1.5px dashed #cbaeb6; border-radius: 17px; background: #fffbfb; cursor: pointer; text-align: center; }
 .upload-box input { position: absolute; opacity: 0; pointer-events: none; }
 .upload-icon { width: 42px; height: 42px; display: grid; place-items: center; margin-bottom: 11px; border-radius: 50%; background: var(--blush); color: var(--wine); font-size: 1.2rem; }
@@ -1186,6 +1197,8 @@ h2 { font-size: clamp(2.5rem, 4.8vw, 4.5rem); line-height: 0.98; }
   .agreement-section > h3 { font-size: 1.55rem; }
   .full-agreement-list .agreement-item { padding: 17px; }
   .payment-methods { grid-template-columns: 1fr 1fr; }
+  .day-choice-grid { grid-template-columns: 1fr 1fr; }
+  .day-choice legend { font-size: 1.1rem; }
   .security-check-card > div { align-items: flex-start; flex-direction: column; gap: 5px; }
   .document-toolbar { align-items: flex-start; flex-direction: column; }
   .document-preview.a4-contract { padding: 31px 20px 38px; }
@@ -1588,3 +1601,19 @@ h2 { font-size: clamp(2.5rem, 4.8vw, 4.5rem); line-height: 0.98; }
 .saved-proof-note { display: flex; align-items: baseline; gap: 8px; margin: 0 0 12px; padding: 12px 14px; border: 1px solid rgba(46, 122, 75, .3); border-radius: 12px; background: #f1f8f3; color: #2f5c40; font-size: .84rem; line-height: 1.5; }
 .saved-proof-note span { color: #2e7a4b; font-weight: 800; }
 .saved-proof-note strong { color: #244c33; }
+
+/* Which day works best */
+.day-availability-rows { display: grid; gap: 10px; }
+.day-availability-rows article { display: grid; grid-template-columns: 116px minmax(0,1fr) 108px auto; gap: 14px; align-items: center; padding: 12px 14px; border: 1px solid #ece2e4; border-radius: 13px; background: #fdfcfc; }
+.day-availability-rows article.best { border-color: #d8adba; background: #fdf5f7; }
+.day-availability-rows strong { font-size: .95rem; }
+.day-bar { height: 11px; border-radius: 99px; background: #f0e6e9; overflow: hidden; }
+.day-bar span { display: block; height: 100%; border-radius: 99px; background: var(--wine); }
+.day-availability-rows b { display: flex; align-items: baseline; gap: 7px; color: var(--wine-dark); font-size: .92rem; font-variant-numeric: tabular-nums; }
+.day-availability-rows b small { color: var(--muted); font-size: .76rem; font-weight: 600; }
+.day-missing { grid-column: 1 / -1; margin: 2px 0 0; color: var(--muted); font-size: .8rem; line-height: 1.5; }
+@media (max-width: 760px) {
+  .day-availability-rows article { grid-template-columns: 1fr auto; gap: 8px; }
+  .day-bar { grid-column: 1 / -1; order: 3; }
+  .day-availability-rows article > .status-chip { order: 2; }
+}

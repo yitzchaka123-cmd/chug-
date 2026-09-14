@@ -64,9 +64,6 @@ export function personalizeAgreementSections(base: readonly AgreementSection[], 
   const planSummary = plan.map((period) => `${period.label}: ${shekels(period.amountDueAgorot)}₪`).join("; ");
   const methods = pricing.paymentMethodLabels?.length ? pricing.paymentMethodLabels.join("\n") : "The payment method selected during registration";
 
-  const weekdays = ["Sundays", "Mondays", "Tuesdays", "Wednesdays", "Thursdays", "Fridays", "Saturdays"];
-  const weekday = weekdays[pricing.scheduleWeekday] || "Wednesdays";
-  const weekdaySingular = weekday.replace(/s$/, "");
   const formatDate = (input: string, monthOnlyOnFirst = false) => {
     const date = new Date(`${input}T12:00:00Z`);
     return new Intl.DateTimeFormat("en-US", { month: "long", ...(monthOnlyOnFirst && date.getUTCDate() === 1 ? {} : { day: "numeric" }), year: "numeric", timeZone: "UTC" }).format(date);
@@ -82,9 +79,9 @@ export function personalizeAgreementSections(base: readonly AgreementSection[], 
       return {
         title: section.title,
         paragraphs: section.paragraphs.map((paragraph) => {
-          if (paragraph.id === "schedule-calendar") return { ...paragraph, text: `We follow the Israeli public school calendar for the ${pricing.schoolYearName} school year: choir meets every ${weekdaySingular} that school is in session, from ${formatDate(pricing.startsOn, true)} until ${formatDate(pricing.endsOn)} (no regular sessions after that date).` };
+          if (paragraph.id === "schedule-calendar") return { ...paragraph, text: `We follow the Israeli public school calendar for the ${pricing.schoolYearName} school year: choir meets every week that school is in session, from ${formatDate(pricing.startsOn, true)} until ${formatDate(pricing.endsOn)} (no regular sessions after that date).` };
           if (paragraph.id === "schedule-dates") return { ...paragraph, text: `The choir year runs from ${formatDate(pricing.startsOn, true)} through ${formatDate(pricing.endsOn)}.` };
-          if (paragraph.id === "schedule-school-closure") return { ...paragraph, text: `If there is no school on a ${weekdaySingular} - including a last-minute closure for any reason, security situations included - there is no choir that day. Individual cancelled sessions are not refunded, and the monthly fee stays the same as long as at least one session takes place that month. If a whole calendar month passes with no sessions at all, that month is simply free.` };
+          if (paragraph.id === "schedule-school-closure") return { ...paragraph, text: `If there is no school on the choir day - including a last-minute closure for any reason, security situations included - there is no choir that day. Individual cancelled sessions are not refunded, and the monthly fee stays the same as long as at least one session takes place that month. If a whole calendar month passes with no sessions at all, that month is simply free.` };
           return { ...paragraph };
         }),
       };
@@ -92,7 +89,7 @@ export function personalizeAgreementSections(base: readonly AgreementSection[], 
     if (section.title === "Session Length & Group Times") {
       return {
         title: section.title,
-        paragraphs: section.paragraphs.map((paragraph) => paragraph.id === "schedule-length-groups" ? { ...paragraph, text: `Sessions are ${pricing.sessionLengthMinutes} minutes, on ${weekday} between ${displayTime(pricing.scheduleStartTime)} and ${displayTime(pricing.scheduleEndTime)}. We share each group’s exact time once registration closes, so the girls land in the groups that fit their ages best. We can’t wait to open with a wonderful group of girls, b’ezrat Hashem - and in the unlikely case we do not reach the minimum number needed to run the program this year, every payment is returned in full.` } : { ...paragraph }),
+        paragraphs: section.paragraphs.map((paragraph) => paragraph.id === "schedule-length-groups" ? { ...paragraph, text: `Sessions are ${pricing.sessionLengthMinutes} minutes, at a set time between ${displayTime(pricing.scheduleStartTime)} and ${displayTime(pricing.scheduleEndTime)}. The day of the week is chosen after registration, based on the days families told us can work, and each group’s exact day and time are shared once the groups are arranged by age. We can’t wait to open with a wonderful group of girls, b’ezrat Hashem - and in the unlikely case we do not reach the minimum number needed to run the program this year, every payment is returned in full.` } : { ...paragraph }),
       };
     }
     if (section.title === "Location") {
