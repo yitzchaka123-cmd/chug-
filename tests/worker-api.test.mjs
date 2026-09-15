@@ -178,6 +178,15 @@ test("registration, custom pricing, schedules, PDFs, admin data and backups work
       body: await encodedForm.arrayBuffer(),
     }));
     assert.ok(submitted.registrationId && submitted.downloadUrl && submitted.scheduleUrl);
+    // Returning to the saved-progress link after signing must say the
+    // registration is finished, not report a missing draft.
+    const finishedLink = await request(`/api/registrations/draft?token=${encodeURIComponent(draft.token)}`);
+    assert.equal(finishedLink.status, 200, "a completed saved link still answers");
+    const finishedBody = await finishedLink.json();
+    assert.equal(finishedBody.completed, true, "the saved link reports the registration as complete");
+    assert.equal(finishedBody.participantName, "Test Student");
+    assert.equal(finishedBody.data, undefined, "a completed link must not hand back the form data again");
+
     const submittedDetail = await json(await request(`/api/admin/registrations/${encodeURIComponent(submitted.registrationId)}`, { headers: adminHeaders }));
     assert.equal(submittedDetail.registration.proofStatus, "not_required", "this registration pays cash, so a screenshot left on the draft is ignored rather than blocking it");
 

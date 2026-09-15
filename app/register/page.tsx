@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ChangeEvent, PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import { agreementSections, approvalAgreementSections, agreementVersion, type AgreementSection } from "../agreement-2026-2027";
 import { availableDayOptions } from "@/lib/available-days";
+import { ButtonSpinner, ChoirLoader } from "../loader";
 import { choirConfig } from "../site-config";
 
 const steps = ["Details", "Care", "Agreement", "Days", "Payment", "Review & sign"];
@@ -18,6 +19,8 @@ function friendlyError(error: unknown, fallback: string) {
 
 export default function RegistrationPreview() {
   const [step, setStep] = useState(0);
+  const [booting, setBooting] = useState(true);
+  const [alreadyCompleted, setAlreadyCompleted] = useState<{ name: string } | null>(null);
   const [saved, setSaved] = useState("");
   const [savingDraft, setSavingDraft] = useState(false);
   const [draftToken, setDraftToken] = useState("");
@@ -138,7 +141,11 @@ export default function RegistrationPreview() {
       if (resumeToken) {
         try {
           const response = await fetch(`/api/registrations/draft?token=${encodeURIComponent(resumeToken)}`, { cache: "no-store" });
-          const result = await response.json() as { data?: Record<string, unknown>; error?: string; token?: string; proof?: { fileName: string; byteSize: number } | null };
+          const result = await response.json() as { data?: Record<string, unknown>; error?: string; token?: string; completed?: boolean; participantName?: string; proof?: { fileName: string; byteSize: number } | null };
+          if (result.completed) {
+            if (active) { setAlreadyCompleted({ name: typeof result.participantName === "string" ? result.participantName : "" }); setBooting(false); }
+            return;
+          }
           if (!response.ok || !result.data) throw new Error(result.error || "Saved progress could not be loaded.");
           draft = { token: result.token || resumeToken, data: result.data };
           if (result.proof && active) setSavedProof(result.proof);
@@ -169,9 +176,10 @@ export default function RegistrationPreview() {
         setSaved("Saved progress restored");
         window.history.replaceState({}, "", `/register${offer ? `?offer=${encodeURIComponent(offer)}` : ""}`);
       }
+      if (active) setBooting(false);
     }
 
-    void boot();
+    void boot().finally(() => { if (active) setBooting(false); });
     return () => { active = false; };
   }, []);
 
@@ -404,6 +412,29 @@ export default function RegistrationPreview() {
     </aside>
   );
 
+  if (booting) {
+    return (
+      <main className="registration-shell registration-booting">
+        <ChoirLoader variant="page" label="Preparing the registration form…" />
+      </main>
+    );
+  }
+
+  if (alreadyCompleted) {
+    return (
+      <main className="registration-shell registration-complete">
+        <section className="success-card">
+          <span className="success-icon">✓</span>
+          <p className="eyebrow">Already registered</p>
+          <h1>This registration is complete.</h1>
+          <p>{alreadyCompleted.name ? `${alreadyCompleted.name}\u2019s registration` : "This registration"} was signed and submitted, so there is nothing left to fill in. This saved link is finished with.</p>
+          <div className="success-actions"><Link className="button" href="/">Return home</Link><a className="secondary-button" href={`tel:+972535906149`}>Call {choirConfig.brand.phone}</a></div>
+          <small>Need a copy of the signed agreement, or want to register another daughter? Call Nechama and she will sort it out.</small>
+        </section>
+      </main>
+    );
+  }
+
   if (complete) {
     return (
       <main className="registration-shell registration-complete">
@@ -424,7 +455,7 @@ export default function RegistrationPreview() {
     <main className="registration-shell">
       <header className="form-header">
         <Link href="/" className="form-logo"><img src={choirConfig.brand.logo} alt="The Choir Chug" /></Link>
-        <button className="save-button" type="button" disabled={savingDraft} onClick={saveProgress}>{savingDraft ? "Saving…" : "Save & continue later"}</button>
+        <button className="save-button" type="button" disabled={savingDraft} onClick={saveProgress}>{savingDraft ? <><ButtonSpinner /> Saving…</> : "Save & continue later"}</button>
       </header>
 
       <section className="form-intro">
@@ -625,7 +656,7 @@ export default function RegistrationPreview() {
 
           <div className="form-actions">
             <button className="secondary-button" type="button" onClick={() => step > 0 ? setStep(step - 1) : window.location.href = "/"}>{step > 0 ? "Back" : "Return home"}</button>
-            {step === 2 ? null : step < steps.length - 1 ? <button className="button" type="button" disabled={!canContinue} onClick={goForward}>Continue <span>→</span></button> : <button className="button" type="button" disabled={!canComplete || submitting} onClick={submitRegistration}>{submitting ? "Saving…" : "Sign & complete"} <span>→</span></button>}
+            {step === 2 ? null : step < steps.length - 1 ? <button className="button" type="button" disabled={!canContinue} onClick={goForward}>Continue <span>→</span></button> : <button className="button" type="button" disabled={!canComplete || submitting} onClick={submitRegistration}>{submitting ? <><ButtonSpinner /> Saving…</> : "Sign & complete"} <span>→</span></button>}
           </div>
           {submissionError && <p className="submission-error" role="alert">{submissionError}</p>}
         </section>

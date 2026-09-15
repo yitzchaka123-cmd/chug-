@@ -137,6 +137,12 @@ export async function GET(request: Request) {
     const token = new URL(request.url).searchParams.get("token") || "";
     if (!token || token.length > 300) return Response.json({ error: "Return link is invalid." }, { status: 404 });
     const tokenHash = await hashOpaqueToken(token, runtime.CHOIR_TOKEN_SECRET);
+    // A finished registration keeps the same token, so returning to a saved link
+    // after signing can say it is done instead of reporting a missing draft.
+    const finished = await runtime.DB.prepare(`SELECT participant_full_name FROM registrations WHERE draft_token_hash = ? AND status != 'draft' LIMIT 1`).bind(tokenHash).first<{ participant_full_name: string }>();
+    if (finished) {
+      return Response.json({ completed: true, participantName: finished.participant_full_name }, { headers: { "Cache-Control": "private, no-store" } });
+    }
     const row = await runtime.DB.prepare(`SELECT id, form_snapshot_json FROM registrations WHERE draft_token_hash = ? AND status = 'draft' AND (draft_expires_at IS NULL OR draft_expires_at > ?) LIMIT 1`).bind(tokenHash, new Date().toISOString()).first<DraftRow>();
     if (!row) return Response.json({ error: "Saved registration was not found." }, { status: 404 });
     const data = await decryptJson<Record<string, unknown>>(row.form_snapshot_json, runtime.CHOIR_DATA_KEY);

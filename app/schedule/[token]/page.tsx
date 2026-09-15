@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { hebrewDayLetters, holidaysForHebrewDate } from "@/lib/calendar";
 import { candleLightingTime, shabbatEndTime } from "@/lib/zmanim";
+import { ButtonSpinner, ChoirLoader } from "../../loader";
 import { choirConfig } from "../../site-config";
 
 type ScheduleData = {
@@ -188,7 +189,7 @@ export default function ChoirSchedule({ params }: { params: Promise<{ token: str
   return (
     <main className="choir-schedule-shell">
       <header className="choir-schedule-header"><Link href="/"><img src={choirConfig.brand.logo} alt="The Choir Chug" /></Link><span>Choir schedule</span></header>
-      {error ? <section className="schedule-error"><h1>Schedule unavailable</h1><p>{error}</p><a href={`tel:+972535906149`}>Call {choirConfig.brand.phone}</a></section> : !data ? <section className="schedule-loading">Loading schedule…</section> : (
+      {error ? <section className="schedule-error"><h1>Schedule unavailable</h1><p>{error}</p><a href={`tel:+972535906149`}>Call {choirConfig.brand.phone}</a></section> : !data ? <section className="schedule-loading"><ChoirLoader variant="page" label="Loading the choir schedule…" /></section> : (
         <>
           <section className="schedule-hero"><p className="eyebrow">{data.year.name}</p><h1>{data.group?.name || "Group schedule"}</h1>{data.group ? <p>{[data.group.startTime && data.group.endTime ? `${data.group.startTime}–${data.group.endTime}` : "", data.group.location || ""].filter(Boolean).join(" · ")}</p> : <p>Your group schedule is being prepared. This same private link will update automatically after group placement.</p>}</section>
           <div className="schedule-body">
@@ -235,7 +236,7 @@ export default function ChoirSchedule({ params }: { params: Promise<{ token: str
                   <span className="list-body"><strong>{event.status === "cancelled" ? "No choir" : `${event.starts_at.slice(11, 16)}${event.ends_at ? `–${event.ends_at.slice(11, 16)}` : ""}`}</strong><small>{event.labels.hebrewEn}{event.location ? ` · ${event.location}` : ""}</small>{event.holiday && <small className="list-holiday">{event.holiday.en} · <span lang="he" dir="rtl">{event.holiday.he}</span></small>}{event.note && <em>{event.note}</em>}</span>
                 </li>)}</ol> : <p className="schedule-update-empty">No sessions are listed for this month.</p>}
               </section>}
-              {data.group && <section className="calendar-print-row"><label><span>Paper</span><select value={printSize} onChange={(event) => setPrintSize(event.target.value === "A5" ? "A5" : "A4")}><option value="A4">A4</option><option value="A5">A5</option></select></label><button type="button" disabled={printing} onClick={() => void printYearCalendar()}>{printing ? "Preparing…" : "Print yearly calendar"}</button></section>}
+              {data.group && <section className="calendar-print-row"><label><span>Paper</span><select value={printSize} onChange={(event) => setPrintSize(event.target.value === "A5" ? "A5" : "A4")}><option value="A4">A4</option><option value="A5">A5</option></select></label><button type="button" disabled={printing} onClick={() => void printYearCalendar()}>{printing ? <><ButtonSpinner /> Preparing…</> : "Print yearly calendar"}</button></section>}
             </aside>
           </div>
         </>

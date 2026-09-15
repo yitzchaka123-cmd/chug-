@@ -338,15 +338,15 @@ export async function POST(request: Request) {
         emergency_contact_name, emergency_contact_phone, emergency_contact_relation, medical_information_ciphertext, medical_information_iv,
         payment_method, available_weekdays, registration_fee_agorot, monthly_fee_agorot, june_fee_agorot, security_check_agorot,
         payment_proof_status, payment_status, pricing_snapshot_json, form_snapshot_json,
-        download_token_hash, submitted_at, completed_at, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, 'completed', 'awaiting_review', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?)
+        draft_token_hash, download_token_hash, submitted_at, completed_at, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, 'completed', 'awaiting_review', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       registrationId, settings.schoolYearId, settings.agreementVersionId, offer?.id || null, form.daughter, form.birthdate,
       form.father || null, form.fatherPhone || null, form.email, form.mother || null, form.motherPhone || null, form.email,
       form.emergencyName, form.emergencyPhone, form.emergencyRelation, encryptedCare, careEnvelope.iv || null,
       form.method, availableWeekdays, registrationFeeAgorot, monthlyFeeAgorot, juneFeeAgorot, securityCheckAgorot,
       proof || usableProof ? "uploaded" : isCashMethod ? "not_required" : "not_provided",
-      pricingSnapshot, safeFormSnapshot, downloadTokenHash, signedAt, signedAt, signedAt, signedAt,
+      pricingSnapshot, safeFormSnapshot, draftTokenHash, downloadTokenHash, signedAt, signedAt, signedAt, signedAt,
     ));
 
     for (const section of snapshot.sections.filter((item) => item.acknowledgement.required !== false)) {
