@@ -1,16 +1,12 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const sources = [
-  "drizzle/0000_fat_wilson_fisk.sql",
-  "drizzle/0001_calm_scarecrow.sql",
-  "drizzle/0002_sharp_skaar.sql",
-  "drizzle/0003_crazy_cammi.sql",
-  "drizzle/0004_flippant_major_mapleleaf.sql",
-  "drizzle/0005_mushy_the_phantom.sql",
-];
+const sources = (await readdir(join(root, "drizzle")))
+  .filter((file) => file.endsWith(".sql"))
+  .sort()
+  .map((file) => `drizzle/${file}`);
 
 const createTables = [];
 const alterColumns = [];
@@ -93,6 +89,28 @@ const output = [
 
 const destination = join(root, "database/postgres/0001_initial.sql");
 await mkdir(dirname(destination), { recursive: true });
+
+// 0001_initial is the baseline every deployed database has already recorded as
+// applied, and the runner never runs a file twice. Rewriting it therefore only
+// changes what a BRAND NEW database gets - a live database keeps the old shape
+// and the application fails on the missing column. So the baseline is frozen:
+// anything added later needs its own numbered file beside it.
+const existing = await readFile(destination, "utf8").catch(() => null);
+if (existing !== null && existing !== output) {
+  const existingColumns = new Set(existing.match(/"[a-z0-9_]+"/g) || []);
+  const added = [...new Set((output.match(/"[a-z0-9_]+"/g) || []).filter((name) => !existingColumns.has(name)))];
+  console.error([
+    `${destination} would change, but deployed databases have already applied it and will never apply it again.`,
+    added.length ? `New names in the regenerated baseline: ${added.join(", ")}` : "The regenerated baseline differs from the checked-in one.",
+    "",
+    "Add the change as a new file instead, e.g. database/postgres/0005_my_change.sql:",
+    '  ALTER TABLE "table" ADD COLUMN IF NOT EXISTS "column" text DEFAULT \'\' NOT NULL;',
+    "",
+    "Set ALLOW_POSTGRES_BASELINE_REWRITE=1 only when no database has applied the baseline yet.",
+  ].join("\n"));
+  if (process.env.ALLOW_POSTGRES_BASELINE_REWRITE !== "1") process.exit(1);
+}
+
 await writeFile(destination, output, "utf8");
 console.log(`Generated ${destination}`);
 
